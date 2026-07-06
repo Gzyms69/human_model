@@ -1,572 +1,342 @@
 import './style.css';
-import { MIKRO_MODEL, MAKRO_MODEL } from './data';
-import type { DomainNode, HumanModel } from './data';
+import { Network, type Options, type Edge, type Node } from 'vis-network';
+import { DataSet } from 'vis-data';
+import { createIcons, icons } from 'lucide';
+import { MIKRO_NODES, MAKRO_NODES, MIKRO_LINKS, MAKRO_LINKS, type DomainNode, type DomainLink } from './data';
 
-// --- Interfaces for LocalStorage ---
-interface PracticeStatusMap {
-  [key: string]: boolean; // key format: nodeId_practiceIndex -> true/false
-}
+createIcons({ icons });
 
-interface NoteLog {
-  timestamp: string;
-  value?: number; // slider telemetry if present
-  note: string;
-}
+let network: Network | null = null;
+let currentMode: 'MIKRO' | 'MAKRO' = 'MIKRO';
+let nodesDataSet = new DataSet<Node>([]);
+let edgesDataSet = new DataSet<Edge>([]);
+let chaosInterval: number | null = null;
 
-interface NodeLogsMap {
-  [nodeId: string]: NoteLog[];
-}
+const colors = {
+  cognitive: { border: '#00e5ff', background: 'rgba(0, 229, 255, 0.1)', glow: '#00e5ff' },
+  physiological: { border: '#00ffaa', background: 'rgba(0, 255, 170, 0.1)', glow: '#00ffaa' },
+  emotional: { border: '#ff007f', background: 'rgba(255, 0, 127, 0.1)', glow: '#ff007f' },
+  executive: { border: '#ffaa00', background: 'rgba(255, 170, 0, 0.1)', glow: '#ffaa00' },
+  environmental: { border: '#8888ff', background: 'rgba(136, 136, 255, 0.1)', glow: '#8888ff' },
+  awareness: { border: '#ffffff', background: 'rgba(255, 255, 255, 0.1)', glow: '#ffffff' }
+};
 
-// --- Application State ---
-let selectedNode: DomainNode | null = null;
-let selectedModel: HumanModel | null = null;
-let activeSubTab: 'psychology' | 'philosophy' | 'science' = 'psychology';
-
-// Load initial states from LocalStorage
-let completedPractices: PracticeStatusMap = JSON.parse(
-  localStorage.getItem('completed_practices') || '{}'
-);
-let nodeLogs: NodeLogsMap = JSON.parse(
-  localStorage.getItem('node_logs') || '{}'
-);
-
-// Helper: Get color mapping for nodes based on ID
-function getNodeColors(id: string): { color: string; glow: string } {
-  if (id.startsWith('m')) {
-    switch (id) {
-      case 'm1': return { color: 'var(--c-core)', glow: 'rgba(181, 95, 230, 0.4)' }; // Jaźń
-      case 'm2': return { color: 'var(--c-exec)', glow: 'rgba(0, 210, 255, 0.4)' }; // Wola
-      case 'm3': return { color: 'var(--c-cog)', glow: 'rgba(59, 130, 246, 0.4)' }; // Myśli
-      case 'm4': return { color: 'var(--c-aff)', glow: 'rgba(236, 72, 153, 0.4)' }; // Uczucia
-      case 'm5': return { color: 'var(--c-vol)', glow: 'rgba(249, 115, 22, 0.4)' }; // Impulsy
-      case 'm6': return { color: 'var(--c-vol)', glow: 'rgba(249, 115, 22, 0.4)' }; // Zachowania
-      case 'm7': return { color: 'var(--c-som)', glow: 'rgba(20, 184, 166, 0.4)' }; // Wrażenia
-      case 'm8': return { color: 'var(--c-cog)', glow: 'rgba(59, 130, 246, 0.4)' }; // Przekonania
-      case 'm9': return { color: 'var(--c-env)', glow: 'rgba(16, 185, 129, 0.4)' }; // Czynniki zew
-      case 'm10': return { color: 'var(--c-core)', glow: 'rgba(181, 95, 230, 0.4)' }; // Język
-      case 'm11': return { color: 'var(--c-env)', glow: 'rgba(16, 185, 129, 0.4)' }; // Bateria
-      case 'm12': return { color: 'var(--c-bio)', glow: 'rgba(244, 63, 94, 0.4)' }; // Biochemia
-      case 'm13': return { color: 'var(--c-social)', glow: 'rgba(245, 158, 11, 0.4)' }; // Rezonans
-      default: return { color: '#ffffff', glow: 'rgba(255, 255, 255, 0.1)' };
-    }
-  } else {
-    switch (id) {
-      case 'ma1': return { color: 'var(--c-env)', glow: 'rgba(16, 185, 129, 0.4)' }; // Fundament bio
-      case 'ma2': return { color: 'var(--c-som)', glow: 'rgba(20, 184, 166, 0.4)' }; // Środowisko geo
-      case 'ma3': return { color: 'var(--c-core)', glow: 'rgba(181, 95, 230, 0.4)' }; // Nieświadomość
-      case 'ma4': return { color: 'var(--c-aff)', glow: 'rgba(236, 72, 153, 0.4)' }; // Trauma/Pamięć
-      case 'ma5': return { color: 'var(--c-core)', glow: 'rgba(181, 95, 230, 0.4)' }; // Rodzina
-      case 'ma6': return { color: 'var(--c-cog)', glow: 'rgba(59, 130, 246, 0.4)' }; // Język/Symbol
-      case 'ma7': return { color: 'var(--c-bio)', glow: 'rgba(244, 63, 94, 0.4)' }; // Kryzysy
-      case 'ma8': return { color: 'var(--c-social)', glow: 'rgba(245, 158, 11, 0.4)' }; // Zeitgeist
-      case 'ma9': return { color: 'var(--c-meaning)', glow: 'rgba(16, 185, 129, 0.4)' }; // Cel
-      case 'ma10': return { color: 'var(--c-vol)', glow: 'rgba(249, 115, 22, 0.4)' }; // Chaos
-      case 'ma11': return { color: 'var(--c-tech)', glow: 'rgba(6, 182, 212, 0.4)' }; // Technosfera
-      default: return { color: '#ffffff', glow: 'rgba(255, 255, 255, 0.1)' };
-    }
-  }
-}
-
-// --- Render Domain Nodes ---
-function renderNodes(model: HumanModel, containerId: string) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  container.innerHTML = '';
-  model.domains.forEach((node) => {
-    const { color, glow } = getNodeColors(node.id);
-    const card = document.createElement('div');
-    card.className = 'node-card';
-    card.setAttribute('style', `--theme-color: ${color}; --theme-glow: ${glow};`);
-    
-    // Count completed practices for badge
-    const nodePracticesCount = node.practices.length;
-    let completedCount = 0;
-    for (let i = 0; i < nodePracticesCount; i++) {
-      if (completedPractices[`${node.id}_${i}`]) {
-        completedCount++;
-      }
-    }
-
-    card.innerHTML = `
-      <div class="node-card-header">
-        <span class="node-number">#${node.num}</span>
-        ${completedCount > 0 ? `<span class="badge" style="background: rgba(255, 255, 255, 0.08); color: ${color}; font-weight: bold;">Praktyka: ${completedCount}/${nodePracticesCount}</span>` : ''}
-      </div>
-      <div>
-        <h3>${node.title}</h3>
-        <p>${node.subtitle}</p>
-      </div>
-      <div class="node-card-footer">
-        <span class="badge">Psychologia</span>
-        <span class="badge">Filozofia</span>
-        <span class="badge">Nauka</span>
-      </div>
-    `;
-
-    card.addEventListener('click', () => openDrawer(node, model));
-    container.appendChild(card);
-  });
-}
-
-// --- Side Drawer Management ---
-function openDrawer(node: DomainNode, model: HumanModel) {
-  selectedNode = node;
-  selectedModel = model;
+function mapNode(dn: DomainNode): Node {
+  const g = dn.group as keyof typeof colors || 'environmental';
+  const c = colors[g];
   
-  const drawer = document.getElementById('drawer');
-  const backdrop = document.getElementById('drawer-backdrop');
-  const title = document.getElementById('drawer-title');
-  const subtitle = document.getElementById('drawer-subtitle');
-  const notesTextarea = document.getElementById('notes-textarea') as HTMLTextAreaElement;
-
-  if (!drawer || !backdrop || !title || !subtitle || !notesTextarea) return;
-
-  // Header content
-  const { color } = getNodeColors(node.id);
-  title.style.color = color;
-  title.innerText = node.title;
-  subtitle.innerText = node.subtitle;
-
-  // Active sub-tab styling
-  drawer.style.setProperty('--tab-active-bg', color);
-  
-  // Set tab details content
-  updateDrawerTabs();
-
-  // Populate practices list
-  renderPractices();
-
-  // Telemetry check
-  const telemetrySection = document.getElementById('telemetry-log-section');
-  const telemetrySlider = document.getElementById('telemetry-slider') as HTMLInputElement;
-  const sliderLabelText = document.getElementById('slider-label-text');
-  const sliderValDisplay = document.getElementById('slider-val-display');
-
-  if (telemetrySection && telemetrySlider && sliderLabelText && sliderValDisplay) {
-    // Show telemetry for energy (m11), biochem (m12), social (m13)
-    if (node.id === 'm11' || node.id === 'm12' || node.id === 'm13') {
-      telemetrySection.style.display = 'block';
-      let label = 'Wartość:';
-      if (node.id === 'm11') label = 'Poziom Energii (Stan Baterii):';
-      if (node.id === 'm12') label = 'Stan Biochemiczny / Pobudzenie:';
-      if (node.id === 'm13') label = 'Jakość Rezonansu Interpersonalnego:';
-      sliderLabelText.innerText = label;
-
-      // Load latest logged value if present
-      const logs = nodeLogs[node.id] || [];
-      if (logs.length > 0 && logs[logs.length - 1].value !== undefined) {
-        const val = logs[logs.length - 1].value!;
-        telemetrySlider.value = val.toString();
-        sliderValDisplay.innerText = `${val} / 10`;
-      } else {
-        telemetrySlider.value = '5';
-        sliderValDisplay.innerText = '5 / 10';
-      }
-    } else {
-      telemetrySection.style.display = 'none';
-    }
-  }
-
-  // Clear textarea editor
-  notesTextarea.value = '';
-
-  // Render logs history
-  renderNodeLogsHistory();
-
-  // Show Drawer and backdrop
-  drawer.classList.add('open');
-  backdrop.classList.add('show');
-}
-
-function closeDrawer() {
-  const drawer = document.getElementById('drawer');
-  const backdrop = document.getElementById('drawer-backdrop');
-  if (drawer) drawer.classList.remove('open');
-  if (backdrop) backdrop.classList.remove('show');
-  selectedNode = null;
-  selectedModel = null;
-}
-
-// Update Detail Content Panes based on activeSubTab
-function updateDrawerTabs() {
-  if (!selectedNode) return;
-  
-  const panePsych = document.getElementById('pane-psychology');
-  const panePhil = document.getElementById('pane-philosophy');
-  const paneSci = document.getElementById('pane-science');
-
-  if (panePsych && panePhil && paneSci) {
-    panePsych.innerText = selectedNode.details.psychology;
-    panePhil.innerText = selectedNode.details.philosophy;
-    paneSci.innerText = selectedNode.details.science;
-  }
-
-  // Set active class on buttons
-  const tabButtons = document.querySelectorAll('.drawer-tab-btn');
-  tabButtons.forEach(btn => {
-    const type = btn.getAttribute('data-sub');
-    if (type === activeSubTab) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
-
-  // Set active class on panes
-  const panes = [
-    { id: 'pane-psychology', key: 'psychology' },
-    { id: 'pane-philosophy', key: 'philosophy' },
-    { id: 'pane-science', key: 'science' }
-  ];
-
-  panes.forEach(pane => {
-    const el = document.getElementById(pane.id);
-    if (el) {
-      if (pane.key === activeSubTab) {
-        el.classList.add('active');
-      } else {
-        el.classList.remove('active');
-      }
-    }
-  });
-}
-
-// Render practices list inside drawer
-function renderPractices() {
-  const list = document.getElementById('practices-list');
-  if (!list || !selectedNode) return;
-
-  list.innerHTML = '';
-  selectedNode.practices.forEach((practice, index) => {
-    const key = `${selectedNode!.id}_${index}`;
-    const isCompleted = !!completedPractices[key];
-    
-    const item = document.createElement('div');
-    item.className = `practice-item ${isCompleted ? 'completed' : ''}`;
-    item.innerHTML = `
-      <input type="checkbox" class="practice-checkbox" ${isCompleted ? 'checked' : ''}>
-      <span class="practice-text">${practice}</span>
-    `;
-
-    // Handle check toggling
-    const checkbox = item.querySelector('.practice-checkbox') as HTMLInputElement;
-    checkbox.addEventListener('change', () => {
-      completedPractices[key] = checkbox.checked;
-      localStorage.setItem('completed_practices', JSON.stringify(completedPractices));
-      if (checkbox.checked) {
-        item.classList.add('completed');
-      } else {
-        item.classList.remove('completed');
-      }
-      
-      // Update nodes grids to update practice progress badge
-      if (selectedModel) {
-        renderNodes(selectedModel, selectedModel === MIKRO_MODEL ? 'mikro-nodes' : 'makro-nodes');
-      }
-    });
-
-    list.appendChild(item);
-  });
-}
-
-// Render node logs history inside drawer
-function renderNodeLogsHistory() {
-  const container = document.getElementById('node-logs-history');
-  if (!container || !selectedNode) return;
-
-  container.innerHTML = '';
-  const logs = nodeLogs[selectedNode.id] || [];
-  
-  if (logs.length === 0) {
-    container.innerHTML = `<p style="color: var(--text-dark); font-size: 0.8rem; padding: 0.5rem; text-align: center;">Brak historii wpisów dla tego węzła.</p>`;
-    return;
-  }
-
-  // Render reverse chronological
-  [...logs].reverse().forEach((log) => {
-    const dateStr = new Date(log.timestamp).toLocaleString('pl-PL');
-    const item = document.createElement('div');
-    item.className = 'log-entry';
-    item.innerHTML = `
-      <div class="log-entry-meta">
-        <span>${dateStr}</span>
-        ${log.value !== undefined ? `<strong>Wartość: ${log.value}/10</strong>` : ''}
-      </div>
-      <div class="log-entry-content">${escapeHtml(log.note)}</div>
-    `;
-    container.appendChild(item);
-  });
-}
-
-// Escape HTML for user-generated strings
-function escapeHtml(str: string): string {
-  return str.replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-}
-
-// Save note and telemetry log
-function saveNoteAndTelemetry() {
-  const notesTextarea = document.getElementById('notes-textarea') as HTMLTextAreaElement;
-  if (!selectedNode || !notesTextarea) return;
-
-  const noteText = notesTextarea.value.trim();
-  const telemetrySlider = document.getElementById('telemetry-slider') as HTMLInputElement;
-  
-  let val: number | undefined = undefined;
-  if (selectedNode.id === 'm11' || selectedNode.id === 'm12' || selectedNode.id === 'm13') {
-    if (telemetrySlider) {
-      val = parseInt(telemetrySlider.value);
-    }
-  }
-
-  // Standardize notes log even if empty note, as long as slider is changed
-  if (noteText === '' && val === undefined) {
-    alert('Wpisz notatkę lub zarejestruj parametr przed zapisem.');
-    return;
-  }
-
-  const logEntry: NoteLog = {
-    timestamp: new Date().toISOString(),
-    value: val,
-    note: noteText || 'Zarejestrowano sam pomiar parametru.'
+  let node: Node = {
+    id: dn.id,
+    label: dn.title,
+    shape: 'dot',
+    size: 25,
+    font: { color: '#ffffff', size: 14, face: 'Inter' },
+    color: {
+      border: c.border,
+      background: c.background,
+      highlight: { border: '#fff', background: c.border }
+    },
+    shadow: { enabled: true, color: c.glow, size: 20, x: 0, y: 0 }
   };
 
-  if (!nodeLogs[selectedNode.id]) {
-    nodeLogs[selectedNode.id] = [];
-  }
-  nodeLogs[selectedNode.id].push(logEntry);
-
-  // Save to localStorage
-  localStorage.setItem('node_logs', JSON.stringify(nodeLogs));
-
-  // Render updated history in drawer
-  renderNodeLogsHistory();
-
-  // Clear note textarea
-  notesTextarea.value = '';
-
-  // Trigger feedback confirmation
-  alert('Wpis zapisany pomyślnie!');
-}
-
-// --- Top Level View Toggle ---
-function setupTabs() {
-  const buttons = document.querySelectorAll('header .tab-btn');
-  buttons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tabId = btn.getAttribute('data-tab');
-      if (!tabId) return;
-
-      // Update active classes on buttons
-      buttons.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      // Update active classes on sections
-      const sections = document.querySelectorAll('.view-section');
-      sections.forEach(sec => {
-        const id = sec.getAttribute('id');
-        if (id === `view-${tabId}`) {
-          sec.classList.add('active');
-        } else {
-          sec.classList.remove('active');
-        }
-      });
-
-      // Refresh data if dashboard
-      if (tabId === 'dashboard') {
-        updateDashboard();
-      }
-    });
-  });
-}
-
-// --- Dashboard Logic ---
-function updateDashboard() {
-  // 1. Get latest values for Telemetry
-  updateTelemetryWidget('m11', 'dash-val-energy', 'dash-bar-energy'); // Energy
-  updateTelemetryWidget('m12', 'dash-val-biochem', 'dash-bar-biochem'); // Biochem
-  updateTelemetryWidget('m13', 'dash-val-social', 'dash-bar-social'); // Social
-
-  // 2. Compute Practices Completion rates
-  updatePracticesProgress();
-
-  // 3. Render Combined Checkin Feed
-  renderGlobalCheckinFeed();
-}
-
-function updateTelemetryWidget(nodeId: string, textId: string, barId: string) {
-  const textEl = document.getElementById(textId);
-  const barEl = document.getElementById(barId);
-  if (!textEl || !barEl) return;
-
-  const logs = nodeLogs[nodeId] || [];
-  if (logs.length > 0) {
-    // Find last log with value
-    const valLogs = logs.filter(l => l.value !== undefined);
-    if (valLogs.length > 0) {
-      const latestVal = valLogs[valLogs.length - 1].value!;
-      textEl.innerText = `${latestVal} / 10`;
-      barEl.style.width = `${latestVal * 10}%`;
-      return;
-    }
+  if (dn.id === 'm1') { // Jaźń (Obserwator)
+    node.fixed = true; // Zawsze absolutnie w centrum
+    node.x = 0;
+    node.y = 0;
+    node.size = 35;
   }
 
-  textEl.innerText = 'Brak danych';
-  barEl.style.width = '0%';
-}
-
-function updatePracticesProgress() {
-  const countMikroEl = document.getElementById('dash-count-mikro');
-  const barMikroEl = document.getElementById('dash-bar-count-mikro');
-  const countMakroEl = document.getElementById('dash-count-makro');
-  const barMakroEl = document.getElementById('dash-bar-count-makro');
-
-  if (!countMikroEl || !barMikroEl || !countMakroEl || !barMakroEl) return;
-
-  // Compute MIKRO
-  let totalMikro = 0;
-  let completedMikro = 0;
-  MIKRO_MODEL.domains.forEach(node => {
-    node.practices.forEach((_, idx) => {
-      totalMikro++;
-      if (completedPractices[`${node.id}_${idx}`]) {
-        completedMikro++;
-      }
-    });
-  });
-
-  const percentMikro = totalMikro > 0 ? (completedMikro / totalMikro) * 100 : 0;
-  countMikroEl.innerText = `${completedMikro} / ${totalMikro} (${Math.round(percentMikro)}%)`;
-  barMikroEl.style.width = `${percentMikro}%`;
-
-  // Compute MAKRO
-  let totalMakro = 0;
-  let completedMakro = 0;
-  MAKRO_MODEL.domains.forEach(node => {
-    node.practices.forEach((_, idx) => {
-      totalMakro++;
-      if (completedPractices[`${node.id}_${idx}`]) {
-        completedMakro++;
-      }
-    });
-  });
-
-  const percentMakro = totalMakro > 0 ? (completedMakro / totalMakro) * 100 : 0;
-  countMakroEl.innerText = `${completedMakro} / ${totalMakro} (${Math.round(percentMakro)}%)`;
-  barMakroEl.style.width = `${percentMakro}%`;
-}
-
-function renderGlobalCheckinFeed() {
-  const feed = document.getElementById('checkin-feed');
-  if (!feed) return;
-
-  // Flatten logs with node titles
-  interface FlatLog {
-    timestamp: string;
-    nodeTitle: string;
-    nodeId: string;
-    value?: number;
-    note: string;
+  if (dn.id === 'ma9') { // Wektor Egzystencjalny (Atraktor)
+    node.fixed = { x: true, y: false };
+    node.x = 800; // Prawa strona
+    node.mass = 5; // Potężna grawitacja ściągająca
+    node.size = 35;
+  }
+  if (dn.id === 'ma10') { // Czynnik Chaosu
+    node.physics = false; // Lata samodzielnie
+    node.x = -800;
+    node.y = -800;
+  }
+  if (dn.id === 'ma1') { // Fundament (Rdzeń)
+    node.size = 40;
+    node.mass = 3;
   }
 
-  const allLogs: FlatLog[] = [];
+  return node;
+}
+
+function mapEdge(dl: DomainLink): Edge {
+  let edge: Edge = {
+    id: `${dl.from}-${dl.to}-${dl.type}`,
+    from: dl.from,
+    to: dl.to,
+    label: dl.label,
+    font: { color: 'rgba(0,0,0,0)', size: 0, strokeWidth: 0, face: 'Inter', align: 'middle' }, // Całkowicie ukryte domyślnie
+    shadow: { enabled: true, size: 10, x: 0, y: 0 }
+  };
+
+  switch (dl.type) {
+    case 'flow':
+      edge.color = { color: 'rgba(255, 255, 255, 0.2)', highlight: '#fff' };
+      edge.smooth = { enabled: true, type: 'continuous', roundness: 0.5 };
+      edge.width = 1.5;
+      break;
+    case 'awareness':
+      edge.color = { color: 'rgba(255, 255, 255, 0.4)', highlight: '#fff' };
+      edge.dashes = [5, 5];
+      edge.physics = false;
+      edge.width = 1;
+      edge.shadow = { enabled: true, color: '#ffffff', size: 10, x: 0, y: 0 };
+      break;
+    case 'override':
+      edge.color = { color: '#00e5ff', highlight: '#00e5ff' };
+      edge.smooth = false; // Prosta, tnąca linia
+      edge.width = 3;
+      edge.shadow = { enabled: true, color: '#00e5ff', size: 10, x: 0, y: 0 };
+      break;
+    case 'conflict':
+      edge.color = { color: '#ff003c', highlight: '#ff003c' };
+      edge.smooth = { enabled: true, type: 'curvedCW', roundness: 0.3 };
+      edge.width = 2;
+      edge.dashes = [10, 5];
+      edge.length = 300; // Sprężyna odpychająca węzły
+      edge.shadow = { enabled: true, color: '#ff003c', size: 10, x: 0, y: 0 };
+      break;
+  }
+
+  return edge;
+}
+
+function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
+  const container = document.getElementById('network-canvas');
+  if (!container) return;
   
-  // Combine all models data helper to fetch titles easily
-  const allNodes = [...MIKRO_MODEL.domains, ...MAKRO_MODEL.domains];
-  
-  Object.keys(nodeLogs).forEach(nodeId => {
-    const node = allNodes.find(n => n.id === nodeId);
-    if (!node) return;
-
-    nodeLogs[nodeId].forEach(log => {
-      allLogs.push({
-        timestamp: log.timestamp,
-        nodeTitle: node.title,
-        nodeId: nodeId,
-        value: log.value,
-        note: log.note
-      });
-    });
-  });
-
-  // Sort logs by newest first
-  allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  if (allLogs.length === 0) {
-    feed.innerHTML = `<p style="color: var(--text-dark); font-size: 0.9rem; text-align: center; padding: 1.5rem 0;">Brak historii wpisów. Otwórz dowolny węzeł i utwórz pierwszy wpis, aby zasilić tablicę dziennika.</p>`;
-    return;
+  if (chaosInterval) {
+    clearInterval(chaosInterval);
+    chaosInterval = null;
   }
 
-  feed.innerHTML = '';
-  // Show max 20 entries
-  allLogs.slice(0, 20).forEach(log => {
-    const dateStr = new Date(log.timestamp).toLocaleString('pl-PL');
-    const { color } = getNodeColors(log.nodeId);
+  if (network) {
+    network.destroy();
+    network = null;
+  }
+
+  const sourceNodes = mode === 'MIKRO' ? MIKRO_NODES : MAKRO_NODES;
+  const sourceLinks = mode === 'MIKRO' ? MIKRO_LINKS : MAKRO_LINKS;
+
+  nodesDataSet = new DataSet<Node>([]);
+  edgesDataSet = new DataSet<Edge>([]);
+  
+  const initialNodes = sourceNodes.map(mapNode);
+  
+  // Przypisanie perfekcyjnych pozycji początkowych i zamrożenie MIKRO (żeby zapobiec ściąganiu przez sprężyny)
+  if (mode === 'MIKRO') {
+    const groupCounts: Record<string, number> = {};
+    const groupIndex: Record<string, number> = {};
     
-    const item = document.createElement('div');
-    item.className = 'feed-item';
-    item.innerHTML = `
-      <div class="feed-item-header">
-        <span style="color: ${color}; font-weight: bold; font-family: var(--font-title);">${log.nodeTitle}</span>
-        <span>${dateStr}</span>
-      </div>
-      <div class="feed-item-metrics">
-        ${log.value !== undefined ? `<span class="feed-item-val">Parametr: <strong>${log.value}/10</strong></span>` : ''}
-        <span class="feed-item-val">${log.nodeId.startsWith('m') && log.nodeId.length <= 3 ? 'Mikro' : 'Makro'}</span>
-      </div>
-      <div class="feed-item-text">${escapeHtml(log.note)}</div>
-    `;
-    feed.appendChild(item);
-  });
-}
-
-// --- Initialization ---
-function init() {
-  // Render grids
-  renderNodes(MIKRO_MODEL, 'mikro-nodes');
-  renderNodes(MAKRO_MODEL, 'makro-nodes');
-
-  // Setup tabs
-  setupTabs();
-
-  // Drawer event listeners
-  const closeBtn = document.getElementById('drawer-close');
-  const backdrop = document.getElementById('drawer-backdrop');
-  
-  if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
-  if (backdrop) backdrop.addEventListener('click', closeDrawer);
-
-  // Drawer Sub-tab switching
-  const subTabButtons = document.querySelectorAll('.drawer-tab-btn');
-  subTabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const type = btn.getAttribute('data-sub') as any;
-      if (type) {
-        activeSubTab = type;
-        updateDrawerTabs();
+    // Zliczamy węzły w grupach
+    initialNodes.forEach(node => {
+      const dn = sourceNodes.find(n => n.id === node.id);
+      if (dn && node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma')) {
+        const g = dn.group || 'environmental';
+        groupCounts[g] = (groupCounts[g] || 0) + 1;
+        groupIndex[g] = 0;
       }
     });
-  });
 
-  // Telemetry slider label update
-  const slider = document.getElementById('telemetry-slider') as HTMLInputElement;
-  const sliderValDisplay = document.getElementById('slider-val-display');
-  if (slider && sliderValDisplay) {
-    slider.addEventListener('input', () => {
-      sliderValDisplay.innerText = `${slider.value} / 10`;
+    initialNodes.forEach(node => {
+      const dn = sourceNodes.find(n => n.id === node.id);
+      if (dn && node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma')) {
+        const g = dn.group || 'environmental';
+        const angles: Record<string, number> = {
+          cognitive: -Math.PI / 2, // Góra
+          emotional: -Math.PI / 2 + (Math.PI * 2 / 5), // Prawy górny
+          executive: -Math.PI / 2 + (Math.PI * 2 / 5) * 2, // Prawy dolny
+          physiological: -Math.PI / 2 + (Math.PI * 2 / 5) * 3, // Lewy dolny
+          environmental: -Math.PI / 2 + (Math.PI * 2 / 5) * 4, // Lewy górny
+        };
+        const baseAngle = angles[g] !== undefined ? angles[g] : 0;
+        
+        // Rozłożenie węzłów w danej grupie równomiernie
+        const count = groupCounts[g];
+        const idx = groupIndex[g]++;
+        const spread = 0.6; // Szerokość kątowa klastra
+        const offset = count > 1 ? -spread/2 + (spread / (count - 1)) * idx : 0;
+        const finalAngle = baseAngle + offset;
+        
+        const radius = 350 + (idx % 2 === 0 ? 0 : 40); // Lekki zygzak dla lepszego wyglądu
+        
+        node.x = Math.cos(finalAngle) * radius;
+        node.y = Math.sin(finalAngle) * radius;
+        node.fixed = true; // Zamrożenie węzła! Fizyka go nie ściągnie.
+      }
     });
   }
 
-  // Save notes handler
-  const saveBtn = document.getElementById('save-note-btn');
-  if (saveBtn) {
-    saveBtn.addEventListener('click', saveNoteAndTelemetry);
+  nodesDataSet.add(initialNodes);
+  edgesDataSet.add(sourceLinks.map(mapEdge));
+
+  const options: Options = {
+    nodes: { borderWidth: 2 },
+    edges: { hoverWidth: 2, selectionWidth: 2 },
+    physics: {
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: {
+        gravitationalConstant: -100,
+        centralGravity: 0.005,
+        springLength: 150,
+        springConstant: 0.05,
+        damping: 0.1
+      },
+      stabilization: { iterations: 100 }
+    },
+    interaction: { hover: true, tooltipDelay: 200 }
+  };
+
+  network = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
+
+  // Nie dodajemy już kotwic i smyczy, ponieważ pozycje w MIKRO są zamrożone (fixed: true)
+  // To oszczędza CPU i zapobiega jakimkolwiek błędom silnika fizycznego.
+
+  // LOGIKA HOVER (Ukrywanie reszty grafu i pokazywanie etykiet)
+  network.on("hoverNode", (params) => {
+    const nodeId = params.node;
+    if (nodeId.toString().startsWith('anchor_')) return;
+
+    const connectedEdges = network!.getConnectedEdges(nodeId).filter(id => !id.toString().startsWith('tether_'));
+    const connectedNodes = network!.getConnectedNodes(nodeId).filter(id => !id.toString().startsWith('anchor_')) as string[];
+    
+    nodesDataSet.update(nodesDataSet.get().filter(n => !n.id.toString().startsWith('anchor_')).map(n => ({
+      id: n.id,
+      color: (n.id === nodeId || connectedNodes.includes(n.id as string)) ? undefined : { background: 'rgba(50,50,50,0.1)', border: 'rgba(50,50,50,0.2)' },
+      font: { color: (n.id === nodeId || connectedNodes.includes(n.id as string)) ? '#fff' : 'rgba(0,0,0,0)' }
+    })));
+
+    edgesDataSet.update(edgesDataSet.get().filter(e => !e.id.toString().startsWith('tether_')).map(e => {
+      const isConnected = connectedEdges.includes(e.id as string);
+      return {
+        id: e.id,
+        color: isConnected ? undefined : { color: 'rgba(0,0,0,0)' },
+        font: { 
+          color: isConnected ? '#ffffff' : 'rgba(0,0,0,0)',
+          size: isConnected ? 13 : 0,
+          strokeWidth: isConnected ? 5 : 0,
+          strokeColor: isConnected ? '#0f1115' : 'rgba(0,0,0,0)' 
+        } 
+      };
+    }));
+  });
+
+  network.on("blurNode", () => {
+    // Reset stylów tylko dla elementów, bez nadpisywania całej struktury
+    nodesDataSet.update(sourceNodes.map(dn => {
+      const mapped = mapNode(dn);
+      return { id: mapped.id, color: mapped.color, font: mapped.font };
+    }));
+    edgesDataSet.update(sourceLinks.map(dl => {
+      const mapped = mapEdge(dl);
+      return { id: mapped.id, color: mapped.color, font: mapped.font, width: mapped.width };
+    }));
+  });
+
+  network.on("click", (params) => {
+    if (params.nodes.length > 0) {
+      const nodeId = params.nodes[0];
+      const nodeData = sourceNodes.find(n => n.id === nodeId);
+      if (nodeData) displayLog(nodeData);
+    }
+  });
+
+  // HACK CANVASU: Membrana i Custom Drawing
+  network.on("beforeDrawing", (ctx) => {
+    if (mode === 'MAKRO') {
+      // Wittgenstein: Rysowanie Membrany (pola siłowego)
+      const coreNodes = ['ma1', 'ma3', 'ma4', 'ma6']; // Biologia, Trauma, Cień + Membrana jako granica
+      const positions = network!.getPositions(coreNodes);
+      
+      let xs = [], ys = [];
+      for (const id in positions) {
+        xs.push(positions[id].x);
+        ys.push(positions[id].y);
+      }
+      
+      if (xs.length > 0) {
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const radius = Math.max((maxX - minX), (maxY - minY)) / 2 + 100;
+
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.03)';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 15]);
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        ctx.font = "14px Inter";
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.5)';
+        ctx.fillText("MATRYCA JĘZYKOWA (MEMBRANA)", centerX - 120, centerY - radius - 10);
+      }
+    }
+  });
+
+  // Pętla Chaosu (Taleb) - Powolna orbita
+  if (mode === 'MAKRO') {
+    let orbitAngle = Math.PI; // Zaczyna po lewej (przeciwnie do Wektora po prawej)
+    chaosInterval = window.setInterval(() => {
+      orbitAngle += 0.003; // Bardzo powolny, majestatyczny ruch
+      const radius = 800; // Taka sama odległość jak Wektor Egzystencjalny
+      
+      const newX = Math.cos(orbitAngle) * radius;
+      const newY = Math.sin(orbitAngle) * radius;
+
+      nodesDataSet.update({ id: 'ma10', x: newX, y: newY });
+    }, 50) as unknown as number;
   }
 }
 
-// Run on page load
-window.addEventListener('DOMContentLoaded', init);
+function displayLog(node: DomainNode) {
+  document.getElementById('node-title')!.textContent = node.title;
+  document.getElementById('node-desc')!.textContent = node.description;
+  document.getElementById('node-psych')!.textContent = node.psychology;
+  document.getElementById('node-phil')!.textContent = node.philosophy;
+  document.getElementById('node-sci')!.textContent = node.science;
+  document.getElementById('node-lifehack')!.textContent = node.lifehack;
+  document.getElementById('side-panel')!.classList.remove('hidden');
+}
+
+document.getElementById('close-panel')!.addEventListener('click', () => {
+  document.getElementById('side-panel')!.classList.add('hidden');
+});
+
+document.querySelector('[data-tab="mikro"]')!.addEventListener('click', (e) => {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  (e.target as HTMLElement).classList.add('active');
+  currentMode = 'MIKRO';
+  renderNetwork(currentMode);
+});
+
+document.querySelector('[data-tab="makro"]')!.addEventListener('click', (e) => {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  (e.target as HTMLElement).classList.add('active');
+  currentMode = 'MAKRO';
+  renderNetwork(currentMode);
+});
+
+// Obsługa Dzienniczka (Log Toggle)
+const logToggle = document.getElementById('log-toggle');
+if (logToggle) {
+  logToggle.addEventListener('click', () => {
+    document.getElementById('system-log')!.classList.toggle('collapsed');
+  });
+}
+
+// Init
+renderNetwork(currentMode);
