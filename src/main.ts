@@ -199,12 +199,12 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
   // To oszczędza CPU i zapobiega jakimkolwiek błędom silnika fizycznego.
 
   // LOGIKA HOVER (Ukrywanie reszty grafu i pokazywanie etykiet)
-  network.on("hoverNode", (params) => {
+  network.on("hoverNode", (params: any) => {
     const nodeId = params.node;
     if (nodeId.toString().startsWith('anchor_')) return;
 
-    const connectedEdges = network!.getConnectedEdges(nodeId).filter(id => !id.toString().startsWith('tether_'));
-    const connectedNodes = network!.getConnectedNodes(nodeId).filter(id => !id.toString().startsWith('anchor_')) as string[];
+    const connectedEdges = network!.getConnectedEdges(nodeId).filter((id: any) => !id.toString().startsWith('tether_'));
+    const connectedNodes = network!.getConnectedNodes(nodeId).filter((id: any) => !id.toString().startsWith('anchor_')) as string[];
     
     nodesDataSet.update(nodesDataSet.get().filter(n => !n.id.toString().startsWith('anchor_')).map(n => ({
       id: n.id,
@@ -239,7 +239,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     }));
   });
 
-  network.on("click", (params) => {
+  network.on("click", (params: any) => {
     if (params.nodes.length > 0) {
       const nodeId = params.nodes[0];
       const nodeData = sourceNodes.find(n => n.id === nodeId);
@@ -247,8 +247,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     }
   });
 
-  // HACK CANVASU: Membrana i Custom Drawing
-  network.on("beforeDrawing", (ctx) => {
+  network.on("beforeDrawing", (ctx: any) => {
     if (mode === 'MAKRO') {
       // Wittgenstein: Rysowanie Membrany (pola siłowego)
       const coreNodes = ['ma1', 'ma3', 'ma4', 'ma6']; // Biologia, Trauma, Cień + Membrana jako granica

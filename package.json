@@ -11,5 +11,10 @@
   "devDependencies": {
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
+  },
+  "dependencies": {
+    "lucide": "^1.23.0",
+    "vis-data": "^8.0.4",
+    "vis-network": "^10.1.0"
   }
 }
