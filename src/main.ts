@@ -40,7 +40,7 @@ function mapNode(dn: DomainNode): Node {
   };
 
   if (dn.id === 'm1') { // Jaźń (Obserwator)
-    node.fixed = true; // Zawsze absolutnie w centrum
+    node.physics = false; // Pozwala przesuwać, ale nie podlega siłom
     node.x = 0;
     node.y = 0;
     node.size = 35;
@@ -168,7 +168,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         
         node.x = Math.cos(finalAngle) * radius;
         node.y = Math.sin(finalAngle) * radius;
-        node.fixed = true; // Zamrożenie węzła! Fizyka go nie ściągnie.
+        node.physics = false; // Węzeł ignoruje sprężyny (nie skacze), ale można go ręcznie przesuwać
       }
     });
   }
