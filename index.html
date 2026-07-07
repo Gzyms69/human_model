@@ -55,16 +55,34 @@
         </div>
       </aside>
 
-      <!-- Przywrócenie nazwy Dzienniczek i usunięcie hakerskich ikon terminala -->
+      <!-- Legenda: objaśnienie kolorów węzłów i typów połączeń -->
       <div id="system-log" class="collapsed">
         <div class="log-header" id="log-toggle">
-          <h3><i data-lucide="book-open"></i> Dzienniczek</h3>
+          <h3><i data-lucide="list"></i> Legenda</h3>
           <i data-lucide="chevron-up" id="log-chevron"></i>
         </div>
         <div class="log-content">
-          <textarea id="log-input" placeholder="Zapisz swoje przemyślenia..."></textarea>
-          <button id="save-log">Dodaj wpis</button>
-          <div id="saved-logs-container"></div>
+          <div class="legend-section">
+            <h4>Węzły (kolory)</h4>
+            <ul class="legend-list">
+              <li><span class="legend-dot" style="--c:#00e5ff"></span> Poznawcze (umysł, myśli)</li>
+              <li><span class="legend-dot" style="--c:#00ffaa"></span> Fizjologiczne (ciało)</li>
+              <li><span class="legend-dot" style="--c:#ff007f"></span> Emocjonalne (uczucia)</li>
+              <li><span class="legend-dot" style="--c:#ffaa00"></span> Wykonawcze (wola, działanie)</li>
+              <li><span class="legend-dot" style="--c:#8888ff"></span> Środowiskowe (świat zewnętrzny)</li>
+              <li><span class="legend-dot" style="--c:#ffffff"></span> Świadomość (obserwator)</li>
+            </ul>
+          </div>
+          <div class="legend-section">
+            <h4>Połączenia (linie)</h4>
+            <ul class="legend-list">
+              <li><span class="legend-line line-flow"></span> Przepływ — wpływ / oddziaływanie</li>
+              <li><span class="legend-line line-awareness"></span> Świadomość — obserwacja / uważność</li>
+              <li><span class="legend-line line-override"></span> Nadpisanie — silne, bezpośrednie sterowanie</li>
+              <li><span class="legend-line line-conflict"></span> Konflikt — napięcie / opozycja</li>
+            </ul>
+          </div>
+          <p class="legend-hint">Najedź na węzeł, aby wyróżnić jego połączenia i etykiety.</p>
         </div>
       </div>
     </div>
