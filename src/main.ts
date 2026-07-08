@@ -11,6 +11,7 @@ let currentMode: 'MIKRO' | 'MAKRO' = 'MIKRO';
 let nodesDataSet = new DataSet<Node>([]);
 let edgesDataSet = new DataSet<Edge>([]);
 let chaosInterval: number | null = null;
+let clearSelection: (() => void) | null = null;
 
 const colors = {
   cognitive: { border: '#00e5ff', background: 'rgba(0, 229, 255, 0.1)', glow: '#00e5ff' },
@@ -39,25 +40,25 @@ function mapNode(dn: DomainNode): Node {
     shadow: { enabled: true, color: c.glow, size: 20, x: 0, y: 0 }
   };
 
-  if (dn.id === 'm1') { // Jaźń (Obserwator)
-    node.physics = false; // Pozwala przesuwać, ale nie podlega siłom
+  if (dn.id === 'm1') {
+    node.physics = false;
     node.x = 0;
     node.y = 0;
     node.size = 35;
   }
 
-  if (dn.id === 'ma9') { // Wektor Egzystencjalny (Atraktor)
+  if (dn.id === 'ma9') {
     node.fixed = { x: true, y: false };
-    node.x = 800; // Prawa strona
-    node.mass = 5; // Potężna grawitacja ściągająca
+    node.x = 800;
+    node.mass = 5;
     node.size = 35;
   }
-  if (dn.id === 'ma10') { // Czynnik Chaosu
-    node.physics = false; // Lata samodzielnie
+  if (dn.id === 'ma10') {
+    node.physics = false;
     node.x = -800;
     node.y = -800;
   }
-  if (dn.id === 'ma1') { // Fundament (Rdzeń)
+  if (dn.id === 'ma1') {
     node.size = 40;
     node.mass = 3;
   }
@@ -71,7 +72,7 @@ function mapEdge(dl: DomainLink): Edge {
     from: dl.from,
     to: dl.to,
     label: dl.label,
-    font: { color: 'rgba(0,0,0,0)', size: 0, strokeWidth: 0, face: 'Inter', align: 'middle' }, // Całkowicie ukryte domyślnie
+    font: { color: 'rgba(0,0,0,0)', size: 0, strokeWidth: 0, face: 'Inter', align: 'middle' },
     shadow: { enabled: true, size: 10, x: 0, y: 0 }
   };
 
@@ -90,7 +91,7 @@ function mapEdge(dl: DomainLink): Edge {
       break;
     case 'override':
       edge.color = { color: '#00e5ff', highlight: '#00e5ff' };
-      edge.smooth = false; // Prosta, tnąca linia
+      edge.smooth = false;
       edge.width = 3;
       edge.shadow = { enabled: true, color: '#00e5ff', size: 10, x: 0, y: 0 };
       break;
@@ -99,7 +100,7 @@ function mapEdge(dl: DomainLink): Edge {
       edge.smooth = { enabled: true, type: 'curvedCW', roundness: 0.3 };
       edge.width = 2;
       edge.dashes = [10, 5];
-      edge.length = 300; // Sprężyna odpychająca węzły
+      edge.length = 300;
       edge.shadow = { enabled: true, color: '#ff003c', size: 10, x: 0, y: 0 };
       break;
   }
@@ -129,12 +130,10 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
   
   const initialNodes = sourceNodes.map(mapNode);
   
-  // Przypisanie perfekcyjnych pozycji początkowych i zamrożenie MIKRO (żeby zapobiec ściąganiu przez sprężyny)
   if (mode === 'MIKRO') {
     const groupCounts: Record<string, number> = {};
     const groupIndex: Record<string, number> = {};
     
-    // Zliczamy węzły w grupach
     initialNodes.forEach(node => {
       const dn = sourceNodes.find(n => n.id === node.id);
       if (dn && node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma')) {
@@ -149,26 +148,25 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       if (dn && node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma')) {
         const g = dn.group || 'environmental';
         const angles: Record<string, number> = {
-          cognitive: -Math.PI / 2, // Góra
-          emotional: -Math.PI / 2 + (Math.PI * 2 / 5), // Prawy górny
-          executive: -Math.PI / 2 + (Math.PI * 2 / 5) * 2, // Prawy dolny
-          physiological: -Math.PI / 2 + (Math.PI * 2 / 5) * 3, // Lewy dolny
-          environmental: -Math.PI / 2 + (Math.PI * 2 / 5) * 4, // Lewy górny
+          cognitive: -Math.PI / 2,
+          emotional: -Math.PI / 2 + (Math.PI * 2 / 5),
+          executive: -Math.PI / 2 + (Math.PI * 2 / 5) * 2,
+          physiological: -Math.PI / 2 + (Math.PI * 2 / 5) * 3,
+          environmental: -Math.PI / 2 + (Math.PI * 2 / 5) * 4,
         };
         const baseAngle = angles[g] !== undefined ? angles[g] : 0;
         
-        // Rozłożenie węzłów w danej grupie równomiernie
         const count = groupCounts[g];
         const idx = groupIndex[g]++;
-        const spread = 0.6; // Szerokość kątowa klastra
+        const spread = 0.6;
         const offset = count > 1 ? -spread/2 + (spread / (count - 1)) * idx : 0;
         const finalAngle = baseAngle + offset;
         
-        const radius = 350 + (idx % 2 === 0 ? 0 : 40); // Lekki zygzak dla lepszego wyglądu
+        const radius = 350 + (idx % 2 === 0 ? 0 : 40);
         
         node.x = Math.cos(finalAngle) * radius;
         node.y = Math.sin(finalAngle) * radius;
-        node.physics = false; // Węzeł ignoruje sprężyny (nie skacze), ale można go ręcznie przesuwać
+        node.physics = false;
       }
     });
   }
@@ -195,17 +193,14 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 
   network = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
 
-  // Nie dodajemy już kotwic i smyczy, ponieważ pozycje w MIKRO są zamrożone (fixed: true)
-  // To oszczędza CPU i zapobiega jakimkolwiek błędom silnika fizycznego.
+  let selectedNodeId: string | null = null;
 
-  // LOGIKA HOVER (Ukrywanie reszty grafu i pokazywanie etykiet)
-  network.on("hoverNode", (params: any) => {
-    const nodeId = params.node;
+  const highlightNode = (nodeId: string) => {
     if (nodeId.toString().startsWith('anchor_')) return;
 
     const connectedEdges = network!.getConnectedEdges(nodeId).filter((id: any) => !id.toString().startsWith('tether_'));
     const connectedNodes = network!.getConnectedNodes(nodeId).filter((id: any) => !id.toString().startsWith('anchor_')) as string[];
-    
+
     nodesDataSet.update(nodesDataSet.get().filter(n => !n.id.toString().startsWith('anchor_')).map(n => ({
       id: n.id,
       color: (n.id === nodeId || connectedNodes.includes(n.id as string)) ? undefined : { background: 'rgba(50,50,50,0.1)', border: 'rgba(50,50,50,0.2)' },
@@ -217,18 +212,19 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       return {
         id: e.id,
         color: isConnected ? undefined : { color: 'rgba(0,0,0,0)' },
-        font: { 
+        font: {
           color: isConnected ? '#ffffff' : 'rgba(0,0,0,0)',
-          size: isConnected ? 13 : 0,
-          strokeWidth: isConnected ? 5 : 0,
-          strokeColor: isConnected ? '#0f1115' : 'rgba(0,0,0,0)' 
-        } 
+          size: isConnected ? 12 : 0,
+          face: 'Inter',
+          background: isConnected ? 'rgba(23, 27, 33, 0.95)' : undefined,
+          strokeWidth: isConnected ? 6 : 0,
+          strokeColor: isConnected ? 'rgba(23, 27, 33, 0.95)' : 'rgba(0,0,0,0)'
+        }
       };
     }));
-  });
+  };
 
-  network.on("blurNode", () => {
-    // Reset stylów tylko dla elementów, bez nadpisywania całej struktury
+  const resetHighlight = () => {
     nodesDataSet.update(sourceNodes.map(dn => {
       const mapped = mapNode(dn);
       return { id: mapped.id, color: mapped.color, font: mapped.font };
@@ -237,20 +233,51 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       const mapped = mapEdge(dl);
       return { id: mapped.id, color: mapped.color, font: mapped.font, width: mapped.width };
     }));
+  };
+
+  clearSelection = () => {
+    selectedNodeId = null;
+    resetHighlight();
+  };
+
+  network.on("hoverNode", (params: any) => {
+    highlightNode(params.node);
+  });
+
+  network.on("blurNode", () => {
+    if (selectedNodeId) {
+      highlightNode(selectedNodeId);
+    } else {
+      resetHighlight();
+    }
   });
 
   network.on("click", (params: any) => {
     if (params.nodes.length > 0) {
       const nodeId = params.nodes[0];
+
+      if (selectedNodeId === nodeId.toString()) {
+        selectedNodeId = null;
+        resetHighlight();
+        document.getElementById('side-panel')!.classList.add('hidden');
+        return;
+      }
+
       const nodeData = sourceNodes.find(n => n.id === nodeId);
-      if (nodeData) displayLog(nodeData);
+      if (nodeData) {
+        selectedNodeId = nodeId.toString();
+        highlightNode(nodeId);
+        displayLog(nodeData);
+      }
+    } else {
+      selectedNodeId = null;
+      resetHighlight();
     }
   });
 
   network.on("beforeDrawing", (ctx: any) => {
     if (mode === 'MAKRO') {
-      // Wittgenstein: Rysowanie Membrany (pola siłowego)
-      const coreNodes = ['ma1', 'ma3', 'ma4', 'ma6']; // Biologia, Trauma, Cień + Membrana jako granica
+      const coreNodes = ['ma1', 'ma3', 'ma4', 'ma6'];
       const positions = network!.getPositions(coreNodes);
       
       let xs = [], ys = [];
@@ -286,12 +313,11 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     }
   });
 
-  // Pętla Chaosu (Taleb) - Powolna orbita
   if (mode === 'MAKRO') {
-    let orbitAngle = Math.PI; // Zaczyna po lewej (przeciwnie do Wektora po prawej)
+    let orbitAngle = Math.PI;
     chaosInterval = window.setInterval(() => {
-      orbitAngle += 0.003; // Bardzo powolny, majestatyczny ruch
-      const radius = 800; // Taka sama odległość jak Wektor Egzystencjalny
+      orbitAngle += 0.003;
+      const radius = 800;
       
       const newX = Math.cos(orbitAngle) * radius;
       const newY = Math.sin(orbitAngle) * radius;
@@ -313,6 +339,7 @@ function displayLog(node: DomainNode) {
 
 document.getElementById('close-panel')!.addEventListener('click', () => {
   document.getElementById('side-panel')!.classList.add('hidden');
+  clearSelection?.();
 });
 
 document.querySelector('[data-tab="mikro"]')!.addEventListener('click', (e) => {
@@ -329,7 +356,6 @@ document.querySelector('[data-tab="makro"]')!.addEventListener('click', (e) => {
   renderNetwork(currentMode);
 });
 
-// Obsługa Dzienniczka (Log Toggle)
 const logToggle = document.getElementById('log-toggle');
 if (logToggle) {
   logToggle.addEventListener('click', () => {
@@ -337,5 +363,4 @@ if (logToggle) {
   });
 }
 
-// Init
 renderNetwork(currentMode);
