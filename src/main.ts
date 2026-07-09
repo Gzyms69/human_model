@@ -6,6 +6,8 @@ import { MIKRO_NODES, MAKRO_NODES, MIKRO_LINKS, MAKRO_LINKS, type DomainNode, ty
 
 createIcons({ icons });
 
+const isMobile = window.innerWidth < 768 || /Mobi|Android/i.test(navigator.userAgent);
+
 let network: Network | null = null;
 let currentMode: 'MIKRO' | 'MAKRO' = 'MIKRO';
 let nodesDataSet = new DataSet<Node>([]);
@@ -37,7 +39,7 @@ function mapNode(dn: DomainNode): Node {
       background: c.background,
       highlight: { border: '#fff', background: c.border }
     },
-    shadow: { enabled: true, color: c.glow, size: 20, x: 0, y: 0 }
+    shadow: isMobile ? false : { enabled: true, color: c.glow, size: 20, x: 0, y: 0 }
   };
 
   if (dn.id === 'm1') {
@@ -73,13 +75,13 @@ function mapEdge(dl: DomainLink): Edge {
     to: dl.to,
     label: dl.label,
     font: { color: 'rgba(0,0,0,0)', size: 0, strokeWidth: 0, face: 'Inter', align: 'middle' },
-    shadow: { enabled: true, size: 10, x: 0, y: 0 }
+    shadow: isMobile ? false : { enabled: true, size: 10, x: 0, y: 0 }
   };
 
   switch (dl.type) {
     case 'flow':
       edge.color = { color: 'rgba(255, 255, 255, 0.2)', highlight: '#fff' };
-      edge.smooth = { enabled: true, type: 'continuous', roundness: 0.5 };
+      edge.smooth = isMobile ? false : { enabled: true, type: 'continuous', roundness: 0.5 };
       edge.width = 1.5;
       break;
     case 'awareness':
@@ -87,21 +89,21 @@ function mapEdge(dl: DomainLink): Edge {
       edge.dashes = [5, 5];
       edge.physics = false;
       edge.width = 1;
-      edge.shadow = { enabled: true, color: '#ffffff', size: 10, x: 0, y: 0 };
+      if (!isMobile) edge.shadow = { enabled: true, color: '#ffffff', size: 10, x: 0, y: 0 };
       break;
     case 'override':
       edge.color = { color: '#00e5ff', highlight: '#00e5ff' };
       edge.smooth = false;
       edge.width = 3;
-      edge.shadow = { enabled: true, color: '#00e5ff', size: 10, x: 0, y: 0 };
+      if (!isMobile) edge.shadow = { enabled: true, color: '#00e5ff', size: 10, x: 0, y: 0 };
       break;
     case 'conflict':
       edge.color = { color: '#ff003c', highlight: '#ff003c' };
-      edge.smooth = { enabled: true, type: 'curvedCW', roundness: 0.3 };
+      edge.smooth = isMobile ? false : { enabled: true, type: 'curvedCW', roundness: 0.3 };
       edge.width = 2;
       edge.dashes = [10, 5];
       edge.length = 300;
-      edge.shadow = { enabled: true, color: '#ff003c', size: 10, x: 0, y: 0 };
+      if (!isMobile) edge.shadow = { enabled: true, color: '#ff003c', size: 10, x: 0, y: 0 };
       break;
   }
 
@@ -131,43 +133,36 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
   const initialNodes = sourceNodes.map(mapNode);
   
   if (mode === 'MIKRO') {
-    const groupCounts: Record<string, number> = {};
-    const groupIndex: Record<string, number> = {};
+    const categoryOrder = ['cognitive', 'emotional', 'executive', 'physiological', 'environmental'];
     
-    initialNodes.forEach(node => {
-      const dn = sourceNodes.find(n => n.id === node.id);
-      if (dn && node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma')) {
-        const g = dn.group || 'environmental';
-        groupCounts[g] = (groupCounts[g] || 0) + 1;
-        groupIndex[g] = 0;
+    const outerNodes = initialNodes.filter(node => node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma'));
+    
+    outerNodes.sort((a, b) => {
+      const dnA = sourceNodes.find(n => n.id === a.id);
+      const dnB = sourceNodes.find(n => n.id === b.id);
+      const gA = dnA?.group || 'environmental';
+      const gB = dnB?.group || 'environmental';
+      
+      const idxA = categoryOrder.indexOf(gA);
+      const idxB = categoryOrder.indexOf(gB);
+      
+      if (idxA !== idxB) {
+        return idxA - idxB;
       }
+      
+      const numA = parseInt(a.id!.toString().replace(/\D/g, '')) || 0;
+      const numB = parseInt(b.id!.toString().replace(/\D/g, '')) || 0;
+      return numA - numB;
     });
 
-    initialNodes.forEach(node => {
-      const dn = sourceNodes.find(n => n.id === node.id);
-      if (dn && node.id && node.id !== 'm1' && !node.id.toString().startsWith('ma')) {
-        const g = dn.group || 'environmental';
-        const angles: Record<string, number> = {
-          cognitive: -Math.PI / 2,
-          emotional: -Math.PI / 2 + (Math.PI * 2 / 5),
-          executive: -Math.PI / 2 + (Math.PI * 2 / 5) * 2,
-          physiological: -Math.PI / 2 + (Math.PI * 2 / 5) * 3,
-          environmental: -Math.PI / 2 + (Math.PI * 2 / 5) * 4,
-        };
-        const baseAngle = angles[g] !== undefined ? angles[g] : 0;
-        
-        const count = groupCounts[g];
-        const idx = groupIndex[g]++;
-        const spread = 0.6;
-        const offset = count > 1 ? -spread/2 + (spread / (count - 1)) * idx : 0;
-        const finalAngle = baseAngle + offset;
-        
-        const radius = 350 + (idx % 2 === 0 ? 0 : 40);
-        
-        node.x = Math.cos(finalAngle) * radius;
-        node.y = Math.sin(finalAngle) * radius;
-        node.physics = false;
-      }
+    const totalOuter = outerNodes.length;
+    const radius = 460;
+    
+    outerNodes.forEach((node, index) => {
+      const angle = -Math.PI / 2 + (index * 2 * Math.PI) / totalOuter;
+      node.x = Math.cos(angle) * radius;
+      node.y = Math.sin(angle) * radius;
+      node.physics = false;
     });
   }
 
@@ -188,43 +183,99 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       },
       stabilization: { iterations: 100 }
     },
-    interaction: { hover: true, tooltipDelay: 200 }
+    interaction: { hover: !isMobile, tooltipDelay: 200 }
   };
 
   network = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
 
   let selectedNodeId: string | null = null;
 
-  const highlightNode = (nodeId: string) => {
+  const highlightNode = (nodeId: string, clickDOMPos: {x: number, y: number}) => {
     if (nodeId.toString().startsWith('anchor_')) return;
 
     const connectedEdges = network!.getConnectedEdges(nodeId).filter((id: any) => !id.toString().startsWith('tether_'));
     const connectedNodes = network!.getConnectedNodes(nodeId).filter((id: any) => !id.toString().startsWith('anchor_')) as string[];
 
-    nodesDataSet.update(nodesDataSet.get().filter(n => !n.id.toString().startsWith('anchor_')).map(n => ({
-      id: n.id,
-      color: (n.id === nodeId || connectedNodes.includes(n.id as string)) ? undefined : { background: 'rgba(50,50,50,0.1)', border: 'rgba(50,50,50,0.2)' },
-      font: { color: (n.id === nodeId || connectedNodes.includes(n.id as string)) ? '#fff' : 'rgba(0,0,0,0)' }
-    })));
-
-    edgesDataSet.update(edgesDataSet.get().filter(e => !e.id.toString().startsWith('tether_')).map(e => {
-      const isConnected = connectedEdges.includes(e.id as string);
-      return {
-        id: e.id,
-        color: isConnected ? undefined : { color: 'rgba(0,0,0,0)' },
-        font: {
-          color: isConnected ? '#ffffff' : 'rgba(0,0,0,0)',
-          size: isConnected ? 12 : 0,
-          face: 'Inter',
-          background: isConnected ? 'rgba(23, 27, 33, 0.95)' : undefined,
-          strokeWidth: isConnected ? 6 : 0,
-          strokeColor: isConnected ? 'rgba(23, 27, 33, 0.95)' : 'rgba(0,0,0,0)'
-        }
-      };
+    // 1. Zabezpiecz wybrane wezly (przywroc ich pelny kolor)
+    nodesDataSet.update(nodesDataSet.get().filter(n => n.id === nodeId || connectedNodes.includes(n.id as string)).map(n => {
+        const dn = sourceNodes.find(src => src.id === n.id);
+        const mapped = mapNode(dn!);
+        return { id: n.id, color: mapped.color, font: { color: '#ffffff' } };
     }));
+
+    // 2. Zabezpiecz wybrane krawedzie (matchowanie po wygenerowanym ID)
+    edgesDataSet.update(connectedEdges.map(edgeId => {
+        const dl = sourceLinks.find(src => `${src.from}-${src.to}-${src.type}` === edgeId);
+        if (dl) {
+          const mapped = mapEdge(dl);
+          return {
+            id: edgeId,
+            color: mapped.color,
+            font: {
+              color: '#ffffff',
+              size: 12,
+              face: 'Inter',
+              background: 'rgba(23, 27, 33, 0.95)',
+              strokeWidth: 6,
+              strokeColor: 'rgba(23, 27, 33, 0.95)'
+            }
+          };
+        }
+        return { id: edgeId };
+    }));
+
+    // 3. Reszta węzłów i krawędzi będzie wygaszana falowo (obliczanie dystansu)
+    const otherNodes = nodesDataSet.get().filter(n => n.id !== nodeId && !connectedNodes.includes(n.id as string) && !n.id.toString().startsWith('anchor_'));
+    const otherEdges = edgesDataSet.get().filter(e => !connectedEdges.includes(e.id as string) && !e.id.toString().startsWith('tether_'));
+    
+    const positions = network!.getPositions();
+    const originCanvas = network!.DOMtoCanvas(clickDOMPos);
+    
+    // Prędkość propagacji (ms na pixel) - zsynchronizowana z CSS
+    const waveSpeed = 0.5;
+
+    otherNodes.forEach(n => {
+      const pos = positions[n.id];
+      if (pos) {
+        const dist = Math.sqrt(Math.pow(pos.x - originCanvas.x, 2) + Math.pow(pos.y - originCanvas.y, 2));
+        const delay = dist * waveSpeed;
+        
+        setTimeout(() => {
+            if (selectedNodeId === nodeId.toString()) {
+              nodesDataSet.update({
+                id: n.id,
+                color: { background: 'rgba(40,45,50,0.5)', border: 'rgba(40,45,50,0.8)' },
+                font: { color: 'rgba(0,0,0,0)' }
+              });
+            }
+        }, delay);
+      }
+    });
+
+    otherEdges.forEach(e => {
+      const fromPos = positions[e.from as string];
+      const toPos = positions[e.to as string];
+      if (fromPos && toPos) {
+        const midX = (fromPos.x + toPos.x) / 2;
+        const midY = (fromPos.y + toPos.y) / 2;
+        const dist = Math.sqrt(Math.pow(midX - originCanvas.x, 2) + Math.pow(midY - originCanvas.y, 2));
+        const delay = dist * waveSpeed;
+        
+        setTimeout(() => {
+          if (selectedNodeId === nodeId.toString()) {
+            edgesDataSet.update({
+              id: e.id,
+              color: { color: 'rgba(40,45,50,0.2)' },
+              font: { size: 0 }
+            });
+          }
+        }, delay);
+      }
+    });
   };
 
   const resetHighlight = () => {
+
     nodesDataSet.update(sourceNodes.map(dn => {
       const mapped = mapNode(dn);
       return { id: mapped.id, color: mapped.color, font: mapped.font };
@@ -238,40 +289,44 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
   clearSelection = () => {
     selectedNodeId = null;
     resetHighlight();
+    document.getElementById('details-bar')?.classList.add('hidden');
+    document.getElementById('side-panel')?.classList.add('hidden');
   };
-
-  network.on("hoverNode", (params: any) => {
-    highlightNode(params.node);
-  });
-
-  network.on("blurNode", () => {
-    if (selectedNodeId) {
-      highlightNode(selectedNodeId);
-    } else {
-      resetHighlight();
-    }
-  });
 
   network.on("click", (params: any) => {
     if (params.nodes.length > 0) {
       const nodeId = params.nodes[0];
 
       if (selectedNodeId === nodeId.toString()) {
-        selectedNodeId = null;
-        resetHighlight();
-        document.getElementById('side-panel')!.classList.add('hidden');
+        clearSelection?.();
         return;
       }
 
       const nodeData = sourceNodes.find(n => n.id === nodeId);
       if (nodeData) {
         selectedNodeId = nodeId.toString();
-        highlightNode(nodeId);
-        displayLog(nodeData);
+
+        const ripple = document.createElement('div');
+        ripple.className = 'ripple';
+        ripple.style.left = `${params.pointer.DOM.x}px`;
+        ripple.style.top = `${params.pointer.DOM.y}px`;
+        document.querySelector('.network-wrapper')!.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 1200);
+
+        highlightNode(nodeId, params.pointer.DOM);
+        
+        document.getElementById('node-title')!.textContent = nodeData.title;
+        document.getElementById('node-desc')!.textContent = nodeData.description;
+        document.getElementById('node-psych')!.textContent = nodeData.psychology;
+        document.getElementById('node-phil')!.textContent = nodeData.philosophy;
+        document.getElementById('node-sci')!.textContent = nodeData.science;
+        document.getElementById('node-lifehack')!.textContent = nodeData.lifehack;
+        
+        document.getElementById('details-bar')!.classList.remove('hidden');
+        document.getElementById('side-panel')!.classList.add('hidden');
       }
     } else {
-      selectedNodeId = null;
-      resetHighlight();
+      clearSelection?.();
     }
   });
 
@@ -313,7 +368,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     }
   });
 
-  if (mode === 'MAKRO') {
+  if (mode === 'MAKRO' && !isMobile) {
     let orbitAngle = Math.PI;
     chaosInterval = window.setInterval(() => {
       orbitAngle += 0.003;
@@ -327,19 +382,17 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
   }
 }
 
-function displayLog(node: DomainNode) {
-  document.getElementById('node-title')!.textContent = node.title;
-  document.getElementById('node-desc')!.textContent = node.description;
-  document.getElementById('node-psych')!.textContent = node.psychology;
-  document.getElementById('node-phil')!.textContent = node.philosophy;
-  document.getElementById('node-sci')!.textContent = node.science;
-  document.getElementById('node-lifehack')!.textContent = node.lifehack;
+document.getElementById('details-bar')!.addEventListener('click', () => {
   document.getElementById('side-panel')!.classList.remove('hidden');
-}
+  document.getElementById('details-bar')!.classList.add('hidden');
+  createIcons({ icons });
+});
 
 document.getElementById('close-panel')!.addEventListener('click', () => {
   document.getElementById('side-panel')!.classList.add('hidden');
-  clearSelection?.();
+  if (document.getElementById('node-title')!.textContent !== "") {
+    document.getElementById('details-bar')!.classList.remove('hidden');
+  }
 });
 
 document.querySelector('[data-tab="mikro"]')!.addEventListener('click', (e) => {
