@@ -13,6 +13,7 @@ export class AiTracerPanel {
     document.body.appendChild(this.container);
     this.setupEventListeners();
     this.setupAnimationCallbacks();
+    this.setupTopPlayerEventListeners();
   }
 
   private createPanelElement(): HTMLElement {
@@ -117,20 +118,6 @@ export class AiTracerPanel {
 
         <!-- STAGE 3: RESULTS WRAPPER -->
         <div id="ai-results-wrapper" class="ai-results-wrapper hidden">
-          <!-- TOP PLAYBACK CONTROLS BAR -->
-          <div class="ai-controls-card top-controls">
-            <div class="controls-top-row">
-              <span class="controls-title"><i data-lucide="play-circle"></i> Odtwarzacz Śladu Przepływu</span>
-              <span id="step-counter-badge" class="step-badge">Krok 1 / 1</span>
-            </div>
-            <div class="playback-btn-group">
-              <button id="btn-trace-prev" class="ctrl-btn" title="Poprzedni krok"><i data-lucide="skip-back"></i></button>
-              <button id="btn-trace-play" class="ctrl-btn main-play-btn" title="Odtwórz / Pauza"><i data-lucide="play"></i></button>
-              <button id="btn-trace-next" class="ctrl-btn" title="Następny krok"><i data-lucide="skip-forward"></i></button>
-              <button id="btn-trace-reset" class="ctrl-btn" title="Resetuj podświetlenie"><i data-lucide="rotate-ccw"></i></button>
-            </div>
-          </div>
-
           <!-- DYNAMIC SYNTHESIS CARD -->
           <div class="result-summary-card">
             <div class="card-header-flex">
@@ -194,23 +181,21 @@ export class AiTracerPanel {
       });
     });
 
-    // Start Interview Stage
     this.container.querySelector('#btn-start-interview')?.addEventListener('click', () => {
       this.handleStartInterview();
     });
 
-    // Submit Interview Answers
     this.container.querySelector('#btn-submit-interview')?.addEventListener('click', () => {
       this.handleRunFullAnalysisWithInterview();
     });
 
-    // Skip Interview
     this.container.querySelector('#btn-skip-interview')?.addEventListener('click', () => {
       this.handleRunFullAnalysisWithInterview(true);
     });
+  }
 
-    // Playback Controls
-    this.container.querySelector('#btn-trace-play')?.addEventListener('click', () => {
+  private setupTopPlayerEventListeners() {
+    document.getElementById('top-btn-play')?.addEventListener('click', () => {
       if (this.animationController['isPlaying']) {
         this.animationController.pause();
       } else {
@@ -218,15 +203,20 @@ export class AiTracerPanel {
       }
     });
 
-    this.container.querySelector('#btn-trace-prev')?.addEventListener('click', () => {
+    document.getElementById('top-btn-prev')?.addEventListener('click', () => {
       this.animationController.prev();
     });
 
-    this.container.querySelector('#btn-trace-next')?.addEventListener('click', () => {
+    document.getElementById('top-btn-next')?.addEventListener('click', () => {
       this.animationController.next();
     });
 
-    this.container.querySelector('#btn-trace-reset')?.addEventListener('click', () => {
+    document.getElementById('top-btn-reset')?.addEventListener('click', () => {
+      this.animationController.reset();
+    });
+
+    document.getElementById('top-btn-close-player')?.addEventListener('click', () => {
+      this.hideTopPlayer();
       this.animationController.reset();
     });
   }
@@ -235,21 +225,46 @@ export class AiTracerPanel {
     this.animationController.onStepChange = (index: number, nodeId: string) => {
       this.updateActiveTimelineStep(index);
       this.updateDynamicSynthesisHeader(index, nodeId);
+      this.updateTopPlayerStepInfo(index, nodeId);
     };
 
     this.animationController.onStateChange = (isPlaying: boolean, index: number, total: number) => {
-      const playBtn = this.container.querySelector('#btn-trace-play');
-      if (playBtn) {
-        playBtn.innerHTML = isPlaying ? '<i data-lucide="pause"></i>' : '<i data-lucide="play"></i>';
+      const topPlayBtn = document.getElementById('top-btn-play');
+      if (topPlayBtn) {
+        topPlayBtn.innerHTML = isPlaying ? '<i data-lucide="pause"></i>' : '<i data-lucide="play"></i>';
         createIcons({ icons });
       }
 
-      const counterBadge = this.container.querySelector('#step-counter-badge');
-      if (counterBadge) {
+      const topStepCounter = document.getElementById('top-step-counter');
+      if (topStepCounter) {
         const displayStep = Math.min(index + 1, total);
-        counterBadge.textContent = `Krok ${displayStep} / ${total}`;
+        topStepCounter.textContent = `Krok ${displayStep} / ${total}`;
       }
     };
+  }
+
+  private updateTopPlayerStepInfo(_index: number, nodeId: string) {
+    const titleEl = document.getElementById('top-step-title');
+    if (!titleEl) return;
+
+    const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
+    const title = nodeDef ? `${nodeId} - ${nodeDef.title}` : nodeId;
+    titleEl.textContent = title;
+  }
+
+  private showTopPlayer() {
+    const player = document.getElementById('top-tracer-player');
+    if (player) {
+      player.classList.remove('hidden');
+      createIcons({ icons });
+    }
+  }
+
+  private hideTopPlayer() {
+    const player = document.getElementById('top-tracer-player');
+    if (player) {
+      player.classList.add('hidden');
+    }
   }
 
   private async handleStartInterview() {
@@ -327,6 +342,7 @@ export class AiTracerPanel {
       const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value);
       this.renderResults(result);
       
+      this.showTopPlayer();
       this.animationController.loadTrace(result.storyNodes, result.matchedLinks);
       this.animationController.play();
     } catch (err: any) {
@@ -351,7 +367,6 @@ export class AiTracerPanel {
       modelBadge.textContent = result.usedModel ? `AI: ${result.usedModel}` : '';
     }
 
-    // Observer m1 Card
     const observerCard = this.container.querySelector('#observer-card');
     const observerText = this.container.querySelector('#result-observer-text');
     if (result.observerRoleSummary && observerCard && observerText) {
@@ -390,7 +405,6 @@ export class AiTracerPanel {
 
         timelineContainer.appendChild(stepEl);
 
-        // Edge Transition Card
         if (idx < result.steps.length - 1) {
           const nextStep = result.steps[idx + 1];
           const edgeExp = (result.edgeExplanations || []).find(
@@ -474,6 +488,7 @@ export class AiTracerPanel {
 
   public close() {
     this.container.classList.add('hidden');
+    this.hideTopPlayer();
     this.animationController.reset();
   }
 

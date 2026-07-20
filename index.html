@@ -22,6 +22,25 @@
 
       <main class="network-wrapper">
         <div id="network-canvas"></div>
+
+        <!-- Floating Top Canvas Player Bar -->
+        <div id="top-tracer-player" class="top-tracer-player hidden">
+          <div class="top-player-left">
+            <span id="top-step-counter" class="top-step-badge">Krok 1 / 1</span>
+            <span id="top-step-title" class="top-step-title">Dekompozycja Przepływu</span>
+          </div>
+
+          <div class="top-player-center">
+            <button id="top-btn-prev" class="top-ctrl-btn" title="Poprzedni krok"><i data-lucide="skip-back"></i></button>
+            <button id="top-btn-play" class="top-ctrl-btn main-top-play" title="Odtwórz / Pauza"><i data-lucide="play"></i></button>
+            <button id="top-btn-next" class="top-ctrl-btn" title="Następny krok"><i data-lucide="skip-forward"></i></button>
+            <button id="top-btn-reset" class="top-ctrl-btn" title="Resetuj podświetlenie"><i data-lucide="rotate-ccw"></i></button>
+          </div>
+
+          <div class="top-player-right">
+            <button id="top-btn-close-player" class="top-close-btn" title="Zamknij odtwarzacz"><i data-lucide="x"></i></button>
+          </div>
+        </div>
       </main>
 
       <!-- Details Bar (Legenda style) -->
