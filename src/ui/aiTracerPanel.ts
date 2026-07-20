@@ -20,7 +20,7 @@ export class AiTracerPanel {
     panel.className = 'ai-panel hidden';
 
     const savedKey = localStorage.getItem('human_model_openrouter_key') || '';
-    const savedModel = localStorage.getItem('human_model_openrouter_model') || 'google/gemini-2.5-flash:free';
+    const savedModel = localStorage.getItem('human_model_openrouter_model') || 'google/gemma-4-26b-a4b-it:free';
 
     panel.innerHTML = `
       <div class="ai-panel-header">
@@ -42,14 +42,21 @@ export class AiTracerPanel {
       </div>
 
       <div id="ai-settings-drawer" class="ai-settings-drawer hidden">
-        <h4><i data-lucide="key"></i> Ustawienia OpenRouter API</h4>
+        <h4><i data-lucide="key"></i> Ustawienia API (OpenRouter / Google AI Studio)</h4>
         <label>
-          Klucz API:
-          <input type="password" id="input-openrouter-key" placeholder="sk-or-v1-..." value="${savedKey}" />
+          Klucz API (OpenRouter lub Google AI Studio):
+          <input type="password" id="input-openrouter-key" placeholder="sk-or-v1-... lub AIzaSy..." value="${savedKey}" />
         </label>
         <label>
-          Model LLM:
-          <input type="text" id="input-openrouter-model" placeholder="google/gemini-2.5-flash:free" value="${savedModel}" />
+          Model Domyślny OpenRouter:
+          <select id="select-openrouter-model" class="model-select">
+            <option value="google/gemma-4-26b-a4b-it:free" ${savedModel === 'google/gemma-4-26b-a4b-it:free' ? 'selected' : ''}>Google Gemma 4 26B (Free)</option>
+            <option value="openai/gpt-oss-20b:free" ${savedModel === 'openai/gpt-oss-20b:free' ? 'selected' : ''}>OpenAI GPT OSS 20B (Free)</option>
+            <option value="cohere/north-mini-code:free" ${savedModel === 'cohere/north-mini-code:free' ? 'selected' : ''}>Cohere North Mini (Free)</option>
+            <option value="nvidia/nemotron-3-nano-30b-a3b:free" ${savedModel === 'nvidia/nemotron-3-nano-30b-a3b:free' ? 'selected' : ''}>Nvidia Nemotron 3 Nano (Free)</option>
+            <option value="google/gemma-4-31b-it:free" ${savedModel === 'google/gemma-4-31b-it:free' ? 'selected' : ''}>Google Gemma 4 31B (Free)</option>
+            <option value="google/gemini-2.5-flash" ${savedModel === 'google/gemini-2.5-flash' ? 'selected' : ''}>Google Gemini 2.5 Flash (Paid)</option>
+          </select>
         </label>
         <button id="btn-save-settings" class="btn-save-sm">Zapisz Ustawienia</button>
       </div>
@@ -57,12 +64,12 @@ export class AiTracerPanel {
       <div class="ai-panel-body">
         <section class="ai-input-section">
           <label for="ai-story-input" class="input-label">Opisz zdarzenie ze swojego dnia:</label>
-          <textarea id="ai-story-input" rows="3" placeholder="np. Po 8h w pracy pokłóciłem się z partnerką o błogą rzecz..."></textarea>
+          <textarea id="ai-story-input" rows="3" placeholder="np. Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?"></textarea>
           
           <div class="ai-presets-wrap">
             <span class="presets-label">Szybkie przykłady:</span>
             <div class="presets-chips">
-              <button class="preset-chip" data-preset="Po 8 godzinach trudnej pracy pokłóciłem się z partnerką o błahostkę po wejściu do domu.">💬 Kłótnia po pracy</button>
+              <button class="preset-chip" data-preset="Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?">💬 Kłótnia po pracy</button>
               <button class="preset-chip" data-preset="Mimo mocnego postanowienia diety, po stresoogennej rozmowie z szefem zjadłem dużą pizzę i słodycze.">🍔 Zajadanie stresu</button>
               <button class="preset-chip" data-preset="Od trzech dni odkładam wysłanie trudnego maila z wyjaśnieniem błędu w projekcie i odczuwam ściśnięty żołądek.">⏰ Prokrastynacja zadania</button>
               <button class="preset-chip" data-preset="Gdy ktoś zajechał mi drogę w korku, poczułem gwałtowną falę wściekłości i uderzyłem w kierownicę.">⚡ Wybuch złości w korku</button>
@@ -87,7 +94,10 @@ export class AiTracerPanel {
 
         <div id="ai-results-wrapper" class="ai-results-wrapper hidden">
           <div class="result-summary-card">
-            <h3><i data-lucide="activity"></i> Synteza Mechaniki</h3>
+            <div class="card-header-flex">
+              <h3><i data-lucide="activity"></i> Synteza Mechaniki</h3>
+              <span id="result-model-badge" class="model-used-badge"></span>
+            </div>
             <p id="result-summary-text"></p>
             <div class="root-cause-badge">
               <strong>Przyczyna Źródłowa:</strong> <span id="result-root-cause"></span>
@@ -124,29 +134,25 @@ export class AiTracerPanel {
   }
 
   private setupEventListeners() {
-    // Close panel
     this.container.querySelector('#btn-close-ai-panel')?.addEventListener('click', () => {
       this.close();
     });
 
-    // Toggle settings drawer
     this.container.querySelector('#btn-ai-settings')?.addEventListener('click', () => {
       const drawer = this.container.querySelector('#ai-settings-drawer');
       drawer?.classList.toggle('hidden');
     });
 
-    // Save settings
     this.container.querySelector('#btn-save-settings')?.addEventListener('click', () => {
       const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
-      const modelInput = this.container.querySelector('#input-openrouter-model') as HTMLInputElement;
+      const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
       
       if (keyInput) localStorage.setItem('human_model_openrouter_key', keyInput.value.trim());
-      if (modelInput) localStorage.setItem('human_model_openrouter_model', modelInput.value.trim());
+      if (modelSelect) localStorage.setItem('human_model_openrouter_model', modelSelect.value.trim());
       
       this.container.querySelector('#ai-settings-drawer')?.classList.add('hidden');
     });
 
-    // Preset chips
     this.container.querySelectorAll('.preset-chip').forEach((chip) => {
       chip.addEventListener('click', () => {
         const text = chip.getAttribute('data-preset');
@@ -157,12 +163,10 @@ export class AiTracerPanel {
       });
     });
 
-    // Run Analysis Button
     this.container.querySelector('#btn-run-analysis')?.addEventListener('click', () => {
       this.handleRunAnalysis();
     });
 
-    // Playback Controls
     this.container.querySelector('#btn-trace-play')?.addEventListener('click', () => {
       if (this.animationController['isPlaying']) {
         this.animationController.pause();
@@ -218,13 +222,12 @@ export class AiTracerPanel {
     this.container.querySelector('#ai-results-wrapper')?.classList.add('hidden');
 
     const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
-    const modelInput = this.container.querySelector('#input-openrouter-model') as HTMLInputElement;
+    const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
 
     try {
-      const result = await analyzeSituation(story, keyInput?.value, modelInput?.value);
+      const result = await analyzeSituation(story, keyInput?.value, modelSelect?.value);
       this.renderResults(result);
       
-      // Load animation into controller & auto-start trace
       this.animationController.loadTrace(result.storyNodes);
       this.animationController.play();
     } catch (err: any) {
@@ -243,6 +246,11 @@ export class AiTracerPanel {
     (this.container.querySelector('#result-summary-text') as HTMLElement).textContent = result.summary;
     (this.container.querySelector('#result-root-cause') as HTMLElement).textContent = result.rootCause;
     (this.container.querySelector('#result-lifehack-text') as HTMLElement).textContent = result.operationalLifehack;
+
+    const modelBadge = this.container.querySelector('#result-model-badge');
+    if (modelBadge) {
+      modelBadge.textContent = result.usedModel ? `AI: ${result.usedModel}` : '';
+    }
 
     const timelineContainer = this.container.querySelector('#timeline-steps-list');
     if (timelineContainer) {

@@ -1120,3 +1120,37 @@ div.vis-tooltip {
   margin: 0;
 }
 
+.model-select {
+  background: rgba(15, 18, 24, 0.9);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 6px;
+  padding: 0.5rem;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.model-select option {
+  background: #0f1218;
+  color: #fff;
+}
+
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.model-used-badge {
+  font-size: 0.68rem;
+  color: #00e5ff;
+  background: rgba(0, 229, 255, 0.15);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-family: monospace;
+}
+
+
