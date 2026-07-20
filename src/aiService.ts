@@ -60,8 +60,81 @@ function formatLinksContext(links: DomainLink[]): string {
     .join('\n');
 }
 
+// Stage 1: Generate 3 targeted clarifying questions
+export async function generateClarifyingQuestions(
+  userStory: string,
+  customApiKey?: string,
+  customModel?: string
+): Promise<string[]> {
+  const apiKey = customApiKey || localStorage.getItem('human_model_openrouter_key') || DEFAULT_API_KEY;
+  const requestedModel = customModel || localStorage.getItem('human_model_openrouter_model') || DEFAULT_MODEL;
+
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('Brak klucza API.');
+  }
+
+  const trimmedKey = apiKey.trim();
+  const prompt = `Jesteś analitykiem behawioralnym. Użytkownik podał opis sytuacji ze swojego dnia: "${userStory}".
+Zadaj dokładnie 3 bardzo konkretne, celowane pytania doprecyzowujące, które pozwolą odkryć tło i mechanikę (np. dlaczego doszło do impulsu, co działo się w ciele, jak zareagowała druga strona).
+
+Zwróć TYLKO czysty obiekt JSON:
+{
+  "questions": [
+    "Pytanie 1?",
+    "Pytanie 2?",
+    "Pytanie 3?"
+  ]
+}`;
+
+  const candidateModels = [
+    requestedModel,
+    ...FALLBACK_MODELS.filter((m) => m !== requestedModel)
+  ];
+
+  for (const targetModel of candidateModels) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${trimmedKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://humanmodel.local',
+          'X-Title': 'Human Model AI Tracer'
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          response_format: { type: 'json_object' }
+        })
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const raw = data.choices?.[0]?.message?.content;
+      if (!raw) continue;
+
+      const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed.questions) && parsed.questions.length >= 3) {
+        return parsed.questions.slice(0, 3);
+      }
+    } catch {}
+  }
+
+  // Fallback questions if API fails or model returns non-array
+  return [
+    'Czy ta reakcja pojawiła się nagle, czy napięcie narastało już od dłuższego czasu?',
+    'Jak zareagowało Twoje ciało i druga strona w momencie kulminacji?',
+    'Czy pojawił się moment pauzy Obserwator (m1), czy impuls natychmiast przejął kontrolę?'
+  ];
+}
+
+// Stage 2: Full analysis with optional user answers context
 export async function analyzeSituation(
   userStory: string,
+  userAnswers?: Record<string, string>,
   customApiKey?: string,
   customModel?: string
 ): Promise<SituationAnalysisResult> {
@@ -75,11 +148,19 @@ export async function analyzeSituation(
   const trimmedKey = apiKey.trim();
 
   if (trimmedKey.startsWith('AIzaSy')) {
-    return analyzeWithGoogleDirect(userStory, trimmedKey);
+    return analyzeWithGoogleDirect(userStory, userAnswers, trimmedKey);
   }
 
   const nodesContext = formatNodesContext(MIKRO_NODES);
   const linksContext = formatLinksContext(MIKRO_LINKS);
+
+  let formattedAnswersContext = '';
+  if (userAnswers && Object.keys(userAnswers).length > 0) {
+    formattedAnswersContext = '\nDodatkowe fakty i wyjaśnienia udzielone przez użytkownika w wywiadzie:\n' +
+      Object.entries(userAnswers)
+        .map(([q, a]) => `- Pytanie: "${q}" -> Odpowiedź: "${a}"`)
+        .join('\n') + '\n';
+  }
 
   const systemPrompt = `Jesteś światowej klasy analitykiem behawioralnym i twórcą systemu "Human Model".
 Twoim zadaniem jest dokładna dekompozycja sytuacji z życia użytkownika na ciągły, nieprzerwany przepływ przyczynowo-skutkowy po grafie.
@@ -87,44 +168,29 @@ Twoim zadaniem jest dokładna dekompozycja sytuacji z życia użytkownika na ci�
 Dostępne Węzły Systemowe:
 ${nodesContext}
 
-Istniejące Połączenia w Grafie (Używaj relacji między tymi węzłami):
+Istniejące Połączenia w Grafie:
 ${linksContext}
-
+${formattedAnswersContext}
 KRYTYCZNE ZASADY ANALIZY SYSTEMOWEJ:
 1. **Dostępność i Przepływ**: Sytuacja to ciągła reakcja łańcuchowa.
-2. **BEZWZGLĘDNY OBOWIĄZEK JAŹNI / OBSERWATORA (m1)**: W KAŻDEJ analizie MUSISZ uwzględnić węzeł 'm1' (Jaźń / Obserwator). Wyjaśnij czy Jaźń/Obserwator zadziałała (pauza, zauważenie emocji), czy też została zablokowana i zepchnięta przez automat biochemiczny (m11) i impuls (m5).
-3. **Opis Przejść Między Węzłami (edgeExplanations)**: Opisz dokładnie jak stan jednego węzła przechodzi w stan drugiego węzła.
+2. **BEZWZGLĘDNY OBOWIĄZEK JAŹNI / OBSERWATORA (m1)**: W KAŻDEJ analizie MUSISZ uwzględnić węzeł 'm1' (Jaźń / Obserwator). Wyjaśnij czy Jaźń/Obserwator zadziałała, czy też została wyparta przez automat.
+3. **Opis Mechaniki Kroku (whyItHappened)**: Opisz DOKŁADNIE dlaczego ten konkretny węzeł aktywował się w tej sytuacji. NIE DAWAJ TU PORAD ANI LIFEHACKÓW. Porady dajesz WYŁĄCZNIE w sekcji operationalLifehack!
 
 Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 {
   "summary": "Krótkie 2-3 zdaniowe podsumowanie mechaniki całej sytuacji.",
   "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
   "edgeExplanations": [
-    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Wyczerpanie metaboliczne wywołało spadek napięcia i odczuwalne spięcie w klatce piersiowej." },
-    { "fromNodeId": "m7", "toNodeId": "m4", "transitionText": "Sygnał somatyczny został zinterpretowany przez układ limbiczny jako bezpośredni afekt frustracji." },
-    { "fromNodeId": "m4", "toNodeId": "m3", "transitionText": "Silne uczucie wyzwoliło katastroficzną myśl o bezsensie relacji." },
-    { "fromNodeId": "m3", "toNodeId": "m1", "transitionText": "Obserwator (m1) został osłabiony i nie zdołał dokonać defuzji poznawczej." },
-    { "fromNodeId": "m1", "toNodeId": "m5", "transitionText": "Brak uważności Jaźni pozwolił impulsowi ucieczkowemu na zdominowanie systemu." },
-    { "fromNodeId": "m5", "toNodeId": "m2", "transitionText": "Impuls pokonał osłabioną kontrolę wykonawczą kory przedczołowej." },
-    { "fromNodeId": "m2", "toNodeId": "m6", "transitionText": "Przejście decyzji w natychmiastowe zachowanie werbalne (zerwanie)." }
+    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przeniesienia impetu." }
   ],
   "steps": [
     {
       "step": 1,
       "nodeId": "m11",
       "title": "Biochemia / Stan Metaboliczny",
-      "trigger": "Cały tydzień pracy bez odpoczynku",
-      "whatHappened": "Brak glukozy i zmęczenie układu nerwowego.",
-      "whyItHappened": "Kora czołowa utraciła paliwo do samokontroli."
-    },
-    {
-      "step": 5,
-      "nodeId": "m1",
-      "title": "Jaźń / Obserwator",
-      "trigger": "Pojawienie się burzy emocjonalnej",
-      "whatHappened": "Jaźń zlała się z myślą (brak dystansu Ja-jako-kontekst).",
-      "whyItHappened": "Brak pauzy 5-sekundowej sprawił, że Obserwator pozostał uśpiony.",
-      "isSelfObserver": true
+      "trigger": "8h pracy",
+      "whatHappened": "Wyczerpanie glukozy",
+      "whyItHappened": "Kora czołowa utraciła paliwo metaboliczne do hamowania impulsów."
     }
   ],
   "observerRoleSummary": "Kluczowy podsumowujący opis roli Jaźni (m1) w tej sytuacji.",
@@ -183,17 +249,14 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
       const cleanedJsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
       const result: SituationAnalysisResult = JSON.parse(cleanedJsonStr);
       
-      // Filter valid node IDs
       const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
       const rawNodes = (result.storyNodes || []).filter((id) => validNodeIds.has(id));
 
-      // EXPAND PATH TO VALID DIRECT GRAPH EDGES USING PATHFINDER (BFS)
       const pathExp = expandPathToValidGraphEdges(rawNodes);
       result.storyNodes = pathExp.expandedNodes;
       result.matchedLinks = pathExp.matchedLinks;
       result.usedModel = targetModel;
 
-      // Ensure steps list covers expanded nodes
       result.steps = patchStepsToCoverExpandedNodes(result.steps || [], result.storyNodes);
 
       return result;
@@ -228,21 +291,31 @@ function patchStepsToCoverExpandedNodes(rawSteps: TraceStep[], expandedNodes: st
       title: nodeDef?.title || nodeId,
       trigger: 'Ogniwo pośrednie przepływu systemowego',
       whatHappened: nodeDef?.description || 'Przeniesienie sygnału w układowym ciągu przyczynowym.',
-      whyItHappened: nodeDef?.lifehack || 'Przekazanie impetu reakcji.',
+      whyItHappened: `Aktywacja układu na poziomie ${nodeDef?.title || nodeId} w reakcji na narastające napięcie.`,
       isSelfObserver: nodeId === 'm1'
     };
   });
 }
 
-async function analyzeWithGoogleDirect(userStory: string, apiKey: string): Promise<SituationAnalysisResult> {
+async function analyzeWithGoogleDirect(
+  userStory: string,
+  userAnswers?: Record<string, string>,
+  apiKey?: string
+): Promise<SituationAnalysisResult> {
   const nodesContext = formatNodesContext(MIKRO_NODES);
   const linksContext = formatLinksContext(MIKRO_LINKS);
+
+  let formattedAnswers = '';
+  if (userAnswers) {
+    formattedAnswers = JSON.stringify(userAnswers);
+  }
 
   const prompt = `Jesteś analitykiem behawioralnym w projekcie Human Model.
 Węzły:
 ${nodesContext}
 Relacje:
 ${linksContext}
+Wywiad: ${formattedAnswers}
 
 Zwróć TYLKO wygenerowany JSON:
 {
@@ -258,7 +331,7 @@ Zwróć TYLKO wygenerowany JSON:
       "title": "Biochemia",
       "trigger": "Wyzwalacz",
       "whatHappened": "Co się stało",
-      "whyItHappened": "Dlaczego",
+      "whyItHappened": "Dlaczego mechanicznie",
       "isSelfObserver": false
     }
   ],

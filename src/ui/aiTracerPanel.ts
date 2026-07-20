@@ -1,6 +1,7 @@
 import { createIcons, icons } from 'lucide';
-import { analyzeSituation, type SituationAnalysisResult } from '../aiService';
+import { analyzeSituation, generateClarifyingQuestions, type SituationAnalysisResult } from '../aiService';
 import { TracerAnimationController } from '../tracerAnimation';
+import { MIKRO_NODES } from '../data';
 
 export class AiTracerPanel {
   private container: HTMLElement;
@@ -62,7 +63,8 @@ export class AiTracerPanel {
       </div>
 
       <div class="ai-panel-body">
-        <section class="ai-input-section">
+        <!-- INPUT SECTION -->
+        <section id="ai-input-section" class="ai-input-section">
           <label for="ai-story-input" class="input-label">Opisz zdarzenie ze swojego dnia:</label>
           <textarea id="ai-story-input" rows="3" placeholder="np. Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?"></textarea>
           
@@ -76,11 +78,32 @@ export class AiTracerPanel {
             </div>
           </div>
 
-          <button id="btn-run-analysis" class="btn-primary-ai">
-            <i data-lucide="brain-circuit"></i>
-            <span>Przeanalizuj Sytuację</span>
+          <button id="btn-start-interview" class="btn-primary-ai">
+            <i data-lucide="help-circle"></i>
+            <span>Przeanalizuj Sytuację (Wywiad Doprecyzowujący)</span>
           </button>
         </section>
+
+        <!-- STAGE 2: CLARIFYING QUESTIONS INTERVIEW -->
+        <div id="ai-interview-wrapper" class="ai-interview-wrapper hidden">
+          <div class="interview-header-card">
+            <h3><i data-lucide="message-square"></i> Doprecyzowanie Kontekstu (3 Pytania AI)</h3>
+            <p>Aby analiza była w 100% trafna, odpowiedz krótko na poniższe pytania:</p>
+          </div>
+
+          <div id="interview-questions-list" class="interview-questions-list"></div>
+
+          <div class="interview-actions">
+            <button id="btn-submit-interview" class="btn-primary-ai">
+              <i data-lucide="brain-circuit"></i>
+              <span>Wygeneruj Głęboki Ślad AI</span>
+            </button>
+            <button id="btn-skip-interview" class="btn-secondary-ai">
+              <i data-lucide="zap"></i>
+              <span>Pomiń wywiad i generuj od razu</span>
+            </button>
+          </div>
+        </div>
 
         <div id="ai-loading" class="ai-loading-state hidden">
           <div class="ai-spinner"></div>
@@ -92,10 +115,26 @@ export class AiTracerPanel {
           <span id="ai-error-msg"></span>
         </div>
 
+        <!-- STAGE 3: RESULTS WRAPPER -->
         <div id="ai-results-wrapper" class="ai-results-wrapper hidden">
+          <!-- TOP PLAYBACK CONTROLS BAR -->
+          <div class="ai-controls-card top-controls">
+            <div class="controls-top-row">
+              <span class="controls-title"><i data-lucide="play-circle"></i> Odtwarzacz Śladu Przepływu</span>
+              <span id="step-counter-badge" class="step-badge">Krok 1 / 1</span>
+            </div>
+            <div class="playback-btn-group">
+              <button id="btn-trace-prev" class="ctrl-btn" title="Poprzedni krok"><i data-lucide="skip-back"></i></button>
+              <button id="btn-trace-play" class="ctrl-btn main-play-btn" title="Odtwórz / Pauza"><i data-lucide="play"></i></button>
+              <button id="btn-trace-next" class="ctrl-btn" title="Następny krok"><i data-lucide="skip-forward"></i></button>
+              <button id="btn-trace-reset" class="ctrl-btn" title="Resetuj podświetlenie"><i data-lucide="rotate-ccw"></i></button>
+            </div>
+          </div>
+
+          <!-- DYNAMIC SYNTHESIS CARD -->
           <div class="result-summary-card">
             <div class="card-header-flex">
-              <h3><i data-lucide="activity"></i> Synteza Mechaniki</h3>
+              <h3 id="synthesis-header-title"><i data-lucide="activity"></i> Synteza Mechaniki</h3>
               <span id="result-model-badge" class="model-used-badge"></span>
             </div>
             <p id="result-summary-text"></p>
@@ -109,21 +148,8 @@ export class AiTracerPanel {
             <p id="result-observer-text"></p>
           </div>
 
-          <div class="ai-controls-card">
-            <div class="controls-top-row">
-              <span class="controls-title"><i data-lucide="play-circle"></i> Odtwarzacz Śladu</span>
-              <span id="step-counter-badge" class="step-badge">Krok 1 / 1</span>
-            </div>
-            <div class="playback-btn-group">
-              <button id="btn-trace-prev" class="ctrl-btn" title="Poprzedni krok"><i data-lucide="skip-back"></i></button>
-              <button id="btn-trace-play" class="ctrl-btn main-play-btn" title="Odtwórz / Pauza"><i data-lucide="play"></i></button>
-              <button id="btn-trace-next" class="ctrl-btn" title="Następny krok"><i data-lucide="skip-forward"></i></button>
-              <button id="btn-trace-reset" class="ctrl-btn" title="Resetuj podświetlenie"><i data-lucide="rotate-ccw"></i></button>
-            </div>
-          </div>
-
           <div class="timeline-section">
-            <h3><i data-lucide="list-ordered"></i> Ciągła Sekwencja Przepływu</h3>
+            <h3><i data-lucide="list-ordered"></i> Sekwencja Przepływu Kroki</h3>
             <div id="timeline-steps-list" class="timeline-steps-list"></div>
           </div>
 
@@ -168,10 +194,22 @@ export class AiTracerPanel {
       });
     });
 
-    this.container.querySelector('#btn-run-analysis')?.addEventListener('click', () => {
-      this.handleRunAnalysis();
+    // Start Interview Stage
+    this.container.querySelector('#btn-start-interview')?.addEventListener('click', () => {
+      this.handleStartInterview();
     });
 
+    // Submit Interview Answers
+    this.container.querySelector('#btn-submit-interview')?.addEventListener('click', () => {
+      this.handleRunFullAnalysisWithInterview();
+    });
+
+    // Skip Interview
+    this.container.querySelector('#btn-skip-interview')?.addEventListener('click', () => {
+      this.handleRunFullAnalysisWithInterview(true);
+    });
+
+    // Playback Controls
     this.container.querySelector('#btn-trace-play')?.addEventListener('click', () => {
       if (this.animationController['isPlaying']) {
         this.animationController.pause();
@@ -194,8 +232,9 @@ export class AiTracerPanel {
   }
 
   private setupAnimationCallbacks() {
-    this.animationController.onStepChange = (index: number) => {
+    this.animationController.onStepChange = (index: number, nodeId: string) => {
       this.updateActiveTimelineStep(index);
+      this.updateDynamicSynthesisHeader(index, nodeId);
     };
 
     this.animationController.onStateChange = (isPlaying: boolean, index: number, total: number) => {
@@ -213,7 +252,7 @@ export class AiTracerPanel {
     };
   }
 
-  private async handleRunAnalysis() {
+  private async handleStartInterview() {
     const textarea = this.container.querySelector('#ai-story-input') as HTMLTextAreaElement;
     const story = textarea?.value.trim();
 
@@ -223,20 +262,75 @@ export class AiTracerPanel {
     }
 
     this.hideError();
-    this.showLoading(true);
+    this.showLoading(true, 'AI analizuje wstępnie sytuację i generuje pytania...');
     this.container.querySelector('#ai-results-wrapper')?.classList.add('hidden');
+    this.container.querySelector('#ai-interview-wrapper')?.classList.add('hidden');
 
     const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
     const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
 
     try {
-      const result = await analyzeSituation(story, keyInput?.value, modelSelect?.value);
+      const questions = await generateClarifyingQuestions(story, keyInput?.value, modelSelect?.value);
+      this.renderInterviewQuestions(questions);
+      this.container.querySelector('#ai-interview-wrapper')?.classList.remove('hidden');
+      this.container.querySelector('#ai-interview-wrapper')?.scrollIntoView({ behavior: 'smooth' });
+    } catch (err: any) {
+      this.showError(err.message || 'Nie udało się wygenerować pytań.');
+    } finally {
+      this.showLoading(false);
+    }
+  }
+
+  private renderInterviewQuestions(questions: string[]) {
+    const list = this.container.querySelector('#interview-questions-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    questions.forEach((q, idx) => {
+      const qBox = document.createElement('div');
+      qBox.className = 'interview-question-box';
+      qBox.innerHTML = `
+        <label class="q-label">Pytanie ${idx + 1}: ${q}</label>
+        <input type="text" class="interview-answer-input" data-question="${q}" placeholder="Krótka odpowiedź (opcjonalnie)..." />
+      `;
+      list.appendChild(qBox);
+    });
+  }
+
+  private async handleRunFullAnalysisWithInterview(skipAnswers: boolean = false) {
+    const textarea = this.container.querySelector('#ai-story-input') as HTMLTextAreaElement;
+    const story = textarea?.value.trim();
+
+    if (!story) return;
+
+    const answersMap: Record<string, string> = {};
+    if (!skipAnswers) {
+      const answerInputs = this.container.querySelectorAll('.interview-answer-input');
+      answerInputs.forEach((input) => {
+        const inp = input as HTMLInputElement;
+        const q = inp.dataset.question;
+        const val = inp.value.trim();
+        if (q && val) {
+          answersMap[q] = val;
+        }
+      });
+    }
+
+    this.hideError();
+    this.showLoading(true, 'Generuję głęboką sekwencję przepływu na grafie...');
+    this.container.querySelector('#ai-interview-wrapper')?.classList.add('hidden');
+
+    const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
+    const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
+
+    try {
+      const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value);
       this.renderResults(result);
       
       this.animationController.loadTrace(result.storyNodes, result.matchedLinks);
       this.animationController.play();
     } catch (err: any) {
-      this.showError(err.message || 'Wystąpił nieoczekiwany błąd podczas analizy.');
+      this.showError(err.message || 'Wystąpił błąd podczas analizy.');
     } finally {
       this.showLoading(false);
     }
@@ -270,7 +364,6 @@ export class AiTracerPanel {
       timelineContainer.innerHTML = '';
       
       result.steps.forEach((step, idx) => {
-        // Step Card
         const stepEl = document.createElement('div');
         const isObserver = step.nodeId === 'm1';
         stepEl.className = `timeline-step-card ${isObserver ? 'observer-step' : ''}`;
@@ -287,7 +380,7 @@ export class AiTracerPanel {
             </div>
             <p class="step-trigger">⚡ <strong>Wyzwalacz:</strong> ${step.trigger}</p>
             <p class="step-desc">🧠 <strong>Co się stało:</strong> ${step.whatHappened}</p>
-            <p class="step-why">🔍 <strong>Mechanika:</strong> ${step.whyItHappened}</p>
+            <p class="step-why">🔍 <strong>Mechanika kroku:</strong> ${step.whyItHappened}</p>
           </div>
         `;
 
@@ -297,7 +390,7 @@ export class AiTracerPanel {
 
         timelineContainer.appendChild(stepEl);
 
-        // Edge Transition Card if not last step
+        // Edge Transition Card
         if (idx < result.steps.length - 1) {
           const nextStep = result.steps[idx + 1];
           const edgeExp = (result.edgeExplanations || []).find(
@@ -311,8 +404,8 @@ export class AiTracerPanel {
           transitionCard.innerHTML = `
             <div class="edge-line-visual"></div>
             <div class="edge-text-content">
-              <span class="edge-flow-arrow">➔ PRZEPŁYW IMPETU:</span>
-              <p>${edgeExp?.transitionText || `Oddziaływanie sygnału z ${step.title} na ${nextStep.title}.`}</p>
+              <span class="edge-flow-arrow">➔ PRZEPŁYW IMPETU (${step.nodeId} ➔ ${nextStep.nodeId}):</span>
+              <p>${edgeExp?.transitionText || `Przeniesienie sygnału z ${step.title} do ${nextStep.title}.`}</p>
             </div>
           `;
           timelineContainer.appendChild(transitionCard);
@@ -335,8 +428,25 @@ export class AiTracerPanel {
     });
   }
 
-  private showLoading(loading: boolean) {
+  private updateDynamicSynthesisHeader(index: number, nodeId: string) {
+    const headerTitle = this.container.querySelector('#synthesis-header-title');
+    if (!headerTitle) return;
+
+    const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
+    const nodeTitle = nodeDef ? nodeDef.title : nodeId;
+
+    if (index >= 0) {
+      headerTitle.innerHTML = `<i data-lucide="activity"></i> Synteza Mechaniki (Krok ${index + 1}: ${nodeTitle})`;
+    } else {
+      headerTitle.innerHTML = `<i data-lucide="activity"></i> Synteza Mechaniki`;
+    }
+    createIcons({ icons });
+  }
+
+  private showLoading(loading: boolean, text: string = 'Dekomponuję sytuację na czynniki pierwsze...') {
     const loadingState = this.container.querySelector('#ai-loading');
+    const loadingText = this.container.querySelector('#ai-loading-text');
+    if (loadingText) loadingText.textContent = text;
     if (loading) {
       loadingState?.classList.remove('hidden');
     } else {
