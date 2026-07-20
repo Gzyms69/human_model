@@ -18,6 +18,9 @@ export interface EdgeExplanation {
 }
 
 export interface SituationAnalysisResult {
+  initialStory?: string;
+  interviewAnswers?: Record<string, string>;
+  createdAt?: string;
   summary: string;
   storyNodes: string[];
   matchedLinks: DomainLink[];
@@ -60,7 +63,6 @@ function formatLinksContext(links: DomainLink[]): string {
     .join('\n');
 }
 
-// Stage 1: Generate 3 targeted clarifying questions
 export async function generateClarifyingQuestions(
   userStory: string,
   customApiKey?: string,
@@ -123,7 +125,6 @@ Zwróć TYLKO czysty obiekt JSON:
     } catch {}
   }
 
-  // Fallback questions if API fails or model returns non-array
   return [
     'Czy ta reakcja pojawiła się nagle, czy napięcie narastało już od dłuższego czasu?',
     'Jak zareagowało Twoje ciało i druga strona w momencie kulminacji?',
@@ -131,7 +132,6 @@ Zwróć TYLKO czysty obiekt JSON:
   ];
 }
 
-// Stage 2: Full analysis with optional user answers context
 export async function analyzeSituation(
   userStory: string,
   userAnswers?: Record<string, string>,
@@ -148,7 +148,11 @@ export async function analyzeSituation(
   const trimmedKey = apiKey.trim();
 
   if (trimmedKey.startsWith('AIzaSy')) {
-    return analyzeWithGoogleDirect(userStory, userAnswers, trimmedKey);
+    const res = await analyzeWithGoogleDirect(userStory, userAnswers, trimmedKey);
+    res.initialStory = userStory;
+    res.interviewAnswers = userAnswers;
+    res.createdAt = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+    return res;
   }
 
   const nodesContext = formatNodesContext(MIKRO_NODES);
@@ -256,6 +260,9 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
       result.storyNodes = pathExp.expandedNodes;
       result.matchedLinks = pathExp.matchedLinks;
       result.usedModel = targetModel;
+      result.initialStory = userStory;
+      result.interviewAnswers = userAnswers;
+      result.createdAt = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
 
       result.steps = patchStepsToCoverExpandedNodes(result.steps || [], result.storyNodes);
 

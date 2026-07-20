@@ -6,6 +6,7 @@ import { MIKRO_NODES } from '../data';
 export class AiTracerPanel {
   private container: HTMLElement;
   private animationController: TracerAnimationController;
+  private lastAnalysisResult: SituationAnalysisResult | null = null;
 
   constructor(animationController: TracerAnimationController) {
     this.animationController = animationController;
@@ -118,6 +119,22 @@ export class AiTracerPanel {
 
         <!-- STAGE 3: RESULTS WRAPPER -->
         <div id="ai-results-wrapper" class="ai-results-wrapper hidden">
+          <!-- CONTEXT HEADER CARD -->
+          <div id="result-context-card" class="result-context-card">
+            <div class="context-card-top">
+              <h3><i data-lucide="file-text"></i> Kontekst Zgłoszenia i Wywiadu</h3>
+              <button id="btn-edit-story" class="btn-edit-sm"><i data-lucide="edit-2"></i> Edytuj</button>
+            </div>
+            <div class="context-story-box">
+              <strong>💬 Pierwotny Opis:</strong>
+              <p id="context-story-text"></p>
+            </div>
+            <div id="context-answers-box" class="context-answers-box hidden">
+              <strong>❓ Doprecyzowanie Faktów (Wywiad):</strong>
+              <div id="context-qa-list" class="context-qa-list"></div>
+            </div>
+          </div>
+
           <!-- DYNAMIC SYNTHESIS CARD -->
           <div class="result-summary-card">
             <div class="card-header-flex">
@@ -143,6 +160,13 @@ export class AiTracerPanel {
           <div class="lifehack-result-card">
             <h3><i data-lucide="zap"></i> Wskazówka Operacyjna (Stoper)</h3>
             <p id="result-lifehack-text"></p>
+          </div>
+
+          <div class="results-export-actions">
+            <button id="btn-copy-report" class="btn-export-primary">
+              <i data-lucide="copy"></i>
+              <span>Kopiuj Pełny Raport Analizy (.md)</span>
+            </button>
           </div>
         </div>
       </div>
@@ -191,6 +215,15 @@ export class AiTracerPanel {
 
     this.container.querySelector('#btn-skip-interview')?.addEventListener('click', () => {
       this.handleRunFullAnalysisWithInterview(true);
+    });
+
+    this.container.querySelector('#btn-edit-story')?.addEventListener('click', () => {
+      this.container.querySelector('#ai-results-wrapper')?.classList.add('hidden');
+      this.container.querySelector('#ai-input-section')?.classList.remove('hidden');
+    });
+
+    this.container.querySelector('#btn-copy-report')?.addEventListener('click', () => {
+      this.handleCopyReport();
     });
   }
 
@@ -243,12 +276,26 @@ export class AiTracerPanel {
     };
   }
 
-  private updateTopPlayerStepInfo(_index: number, nodeId: string) {
+  private updateTopPlayerStepInfo(index: number, nodeId: string) {
     const titleEl = document.getElementById('top-step-title');
     if (!titleEl) return;
 
     const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
     const title = nodeDef ? `${nodeId} - ${nodeDef.title}` : nodeId;
+
+    if (this.lastAnalysisResult && index >= 0 && index < this.lastAnalysisResult.storyNodes.length - 1) {
+      const u = this.lastAnalysisResult.storyNodes[index];
+      const v = this.lastAnalysisResult.storyNodes[index + 1];
+      const edgeExp = (this.lastAnalysisResult.edgeExplanations || []).find(
+        (e) => (e.fromNodeId === u && e.toNodeId === v) || (e.fromNodeId === v && e.toNodeId === u)
+      );
+
+      if (edgeExp?.transitionText) {
+        titleEl.textContent = `${nodeId} ➔ ${v}: ${edgeExp.transitionText.slice(0, 45)}...`;
+        return;
+      }
+    }
+
     titleEl.textContent = title;
   }
 
@@ -340,6 +387,7 @@ export class AiTracerPanel {
 
     try {
       const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value);
+      this.lastAnalysisResult = result;
       this.renderResults(result);
       
       this.showTopPlayer();
@@ -357,6 +405,25 @@ export class AiTracerPanel {
     if (!wrapper) return;
 
     wrapper.classList.remove('hidden');
+
+    // Context Card Render
+    const storyTextEl = this.container.querySelector('#context-story-text');
+    if (storyTextEl) storyTextEl.textContent = result.initialStory || 'Brak wpisu';
+
+    const answersBox = this.container.querySelector('#context-answers-box');
+    const qaList = this.container.querySelector('#context-qa-list');
+    if (result.interviewAnswers && Object.keys(result.interviewAnswers).length > 0 && answersBox && qaList) {
+      qaList.innerHTML = '';
+      Object.entries(result.interviewAnswers).forEach(([q, a]) => {
+        const qaItem = document.createElement('div');
+        qaItem.className = 'context-qa-item';
+        qaItem.innerHTML = `<span class="qa-q">❓ ${q}</span><span class="qa-a">➔ ${a}</span>`;
+        qaList.appendChild(qaItem);
+      });
+      answersBox.classList.remove('hidden');
+    } else if (answersBox) {
+      answersBox.classList.add('hidden');
+    }
 
     (this.container.querySelector('#result-summary-text') as HTMLElement).textContent = result.summary;
     (this.container.querySelector('#result-root-cause') as HTMLElement).textContent = result.rootCause;
@@ -428,6 +495,48 @@ export class AiTracerPanel {
     }
 
     createIcons({ icons });
+  }
+
+  private handleCopyReport() {
+    if (!this.lastAnalysisResult) return;
+
+    const r = this.lastAnalysisResult;
+    let md = `# Raport Analizy Sytuacyjnej Human Model\n\n`;
+    md += `**Czas:** ${r.createdAt || 'b/d'} | **Model AI:** ${r.usedModel || 'b/d'}\n\n`;
+    md += `## 💬 Pierwotna Sytuacja Zgłoszona\n> ${r.initialStory}\n\n`;
+
+    if (r.interviewAnswers && Object.keys(r.interviewAnswers).length > 0) {
+      md += `## ❓ Doprecyzowanie z Wywiadu\n`;
+      Object.entries(r.interviewAnswers).forEach(([q, a]) => {
+        md += `- **Pytanie:** ${q}\n  - **Odpowiedź:** ${a}\n`;
+      });
+      md += `\n`;
+    }
+
+    md += `## 🧠 Synteza Mechaniki\n${r.summary}\n\n`;
+    md += `**Przyczyna Źródłowa:** ${r.rootCause}\n\n`;
+    md += `## 👁️ Rola Jaźni / Obserwatora (m1)\n${r.observerRoleSummary}\n\n`;
+    md += `## 🔄 Sekwencja Przepływu Kroki\n`;
+
+    r.steps.forEach((s) => {
+      md += `### Kroki ${s.step}: ${s.nodeId} - ${s.title}\n`;
+      md += `- **Wyzwalacz:** ${s.trigger}\n`;
+      md += `- **Co się stało:** ${s.whatHappened}\n`;
+      md += `- **Mechanika:** ${s.whyItHappened}\n\n`;
+    });
+
+    md += `## ⚡ Wskazówka Operacyjna (Stoper)\n${r.operationalLifehack}\n`;
+
+    navigator.clipboard.writeText(md).then(() => {
+      const btn = this.container.querySelector('#btn-copy-report span');
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = 'Skopiowano Raport w Markdown! ✓';
+        setTimeout(() => {
+          btn.textContent = orig;
+        }, 2500);
+      }
+    });
   }
 
   private updateActiveTimelineStep(activeIndex: number) {
