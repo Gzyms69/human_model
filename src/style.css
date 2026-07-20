@@ -524,25 +524,24 @@ div.vis-tooltip {
   background: rgba(255,255,255,0.2);
 }
 
-/* DETAILS BAR (Like Legenda) */
+/* RESPONSYWNOŚĆ MOBILNA I SPÓJNY UKŁAD PANELÓW */
 #details-bar {
-  position: absolute;
+  position: fixed;
   top: 50%;
   right: 0;
-  transform: translate(0, -50%);
-  width: 170px;
+  transform: translateY(-50%);
+  width: auto;
+  min-width: 140px;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-right: none;
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  z-index: 15;
+  z-index: 25;
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s;
-  box-shadow: -5px 0 20px rgba(0,0,0,0.2);
+  box-shadow: -5px 0 25px rgba(0,0,0,0.35);
   cursor: pointer;
 }
 
@@ -558,36 +557,10 @@ div.vis-tooltip {
   border-bottom: none;
 }
 
-/* RIPPLE EFFECT */
-.ripple {
-  position: absolute;
-  width: 300vmax;
-  height: 300vmax;
-  border-radius: 50%;
-  border: 2px solid rgba(100, 200, 255, 0.5);
-  box-shadow: 0 0 60px 10px rgba(100, 200, 255, 0.15);
-  transform: translate(-50%, -50%) scale(0);
-  animation: shockwave 1s cubic-bezier(0.0, 0.0, 0.2, 1) forwards;
-  pointer-events: none;
-  z-index: 4;
-}
-
-@keyframes shockwave {
-  0% {
-    transform: translate(-50%, -50%) scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0;
-  }
-}
-
-/* RESPONSYWNOŚĆ MOBILNA */
 @media (max-width: 768px) {
   #side-panel {
-    width: 100vw;
-    max-width: 100vw;
+    width: 90vw;
+    max-width: 90vw;
     padding: 1.5rem;
     z-index: 40;
   }
@@ -595,16 +568,10 @@ div.vis-tooltip {
   #system-log {
     width: calc(100vw - 1.5rem);
     max-width: calc(100vw - 1.5rem);
-    z-index: 30;
+    z-index: 20;
   }
 
   #details-bar {
     z-index: 25;
-  }
-
-  /* Kiedy panel boczny jest otwarty na mobilce, chowamy legendę i details bar */
-  #side-panel:not(.hidden) ~ #system-log,
-  #side-panel:not(.hidden) ~ #details-bar {
-    display: none !important;
   }
 }
