@@ -241,13 +241,11 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
             id: edgeId,
             color: mapped.color,
             font: {
-              color: '#f8fafc',
+              color: 'rgba(0,0,0,0)',
               size: 11,
               face: 'Inter',
-              background: 'rgba(15, 18, 24, 0.96)',
-              strokeWidth: 1,
-              strokeColor: 'rgba(255, 255, 255, 0.15)',
-              align: 'horizontal'
+              background: 'rgba(0,0,0,0)',
+              strokeWidth: 0
             }
           };
         }
@@ -315,13 +313,11 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         id: edgeId,
         width: 3.5,
         font: {
-          color: '#ffffff',
+          color: 'rgba(0,0,0,0)',
           size: 12,
           face: 'Inter',
-          background: 'rgba(15, 18, 24, 0.96)',
-          strokeWidth: 1,
-          strokeColor: 'rgba(255, 255, 255, 0.3)',
-          align: 'horizontal'
+          background: 'rgba(0,0,0,0)',
+          strokeWidth: 0
         }
       });
     }
@@ -502,13 +498,11 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         id: edgeId,
         width: 2.5,
         font: {
-          color: '#f8fafc',
+          color: 'rgba(0,0,0,0)',
           size: 11,
           face: 'Inter',
-          background: 'rgba(15, 18, 24, 0.96)',
-          strokeWidth: 1,
-          strokeColor: 'rgba(255, 255, 255, 0.2)',
-          align: 'horizontal'
+          background: 'rgba(0,0,0,0)',
+          strokeWidth: 0
         }
       });
     }
