@@ -566,55 +566,138 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     const positions = network.getPositions();
     const edges = edgesDataSet.get();
 
-    edges.forEach((edge: any) => {
-      if (!edge.font || typeof edge.font !== 'object' || !edge.font.size || edge.font.size <= 0 || !edge.label) {
-        return;
+    const activeEdges = edges.filter((edge: any) => 
+      edge.font && typeof edge.font === 'object' && edge.font.size && edge.font.size > 0 && edge.label
+    );
+
+    if (activeEdges.length === 0) return;
+
+    const pairGroups: { [key: string]: any[] } = {};
+    activeEdges.forEach((edge: any) => {
+      const pairKey = [edge.from, edge.to].sort().join(':::');
+      if (!pairGroups[pairKey]) pairGroups[pairKey] = [];
+      pairGroups[pairKey].push(edge);
+    });
+
+    interface LabelBox {
+      label: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      fontSize: number;
+      fontFace: string;
+    }
+
+    const boxes: LabelBox[] = [];
+
+    for (const key in pairGroups) {
+      const group = pairGroups[key];
+      const count = group.length;
+
+      group.forEach((edge: any, index: number) => {
+        const fromPos = positions[edge.from];
+        const toPos = positions[edge.to];
+        if (!fromPos || !toPos) return;
+
+        let fraction = 0.5;
+        if (count > 1) {
+          const step = 0.35 / (count - 1);
+          fraction = 0.325 + index * step;
+          if (edge.from > edge.to) {
+            fraction = 1 - fraction;
+          }
+        }
+
+        const x = fromPos.x + (toPos.x - fromPos.x) * fraction;
+        const y = fromPos.y + (toPos.y - fromPos.y) * fraction;
+
+        const fontSize = edge.font.size || 11;
+        const fontFace = edge.font.face || 'Inter';
+
+        ctx.save();
+        ctx.font = `${fontSize}px ${fontFace}`;
+        const metrics = ctx.measureText(edge.label);
+        ctx.restore();
+
+        const padX = 9;
+        const padY = 5;
+        const width = metrics.width + padX * 2;
+        const height = fontSize + padY * 2;
+
+        boxes.push({
+          label: edge.label,
+          x,
+          y,
+          width,
+          height,
+          fontSize,
+          fontFace
+        });
+      });
+    }
+
+    const iterations = 8;
+    const paddingMargin = 6;
+
+    for (let iter = 0; iter < iterations; iter++) {
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const b1 = boxes[i];
+          const b2 = boxes[j];
+
+          const dx = b2.x - b1.x;
+          const dy = b2.y - b1.y;
+
+          const minDx = (b1.width + b2.width) / 2 + paddingMargin;
+          const minDy = (b1.height + b2.height) / 2 + paddingMargin;
+
+          const overlapX = minDx - Math.abs(dx);
+          const overlapY = minDy - Math.abs(dy);
+
+          if (overlapX > 0 && overlapY > 0) {
+            if (overlapX < overlapY) {
+              const pushX = (overlapX / 2) * (dx >= 0 ? 1 : -1);
+              b1.x -= pushX;
+              b2.x += pushX;
+            } else {
+              const pushY = (overlapY / 2) * (dy >= 0 ? 1 : -1);
+              b1.y -= pushY;
+              b2.y += pushY;
+            }
+          }
+        }
       }
+    }
 
-      const fromPos = positions[edge.from];
-      const toPos = positions[edge.to];
-      if (!fromPos || !toPos) return;
-
-      const midX = (fromPos.x + toPos.x) / 2;
-      const midY = (fromPos.y + toPos.y) / 2;
-
-      const fontSize = edge.font.size || 11;
-      const fontFace = edge.font.face || 'Inter';
-
+    boxes.forEach(box => {
       ctx.save();
-      ctx.font = `${fontSize}px ${fontFace}`;
+      ctx.font = `${box.fontSize}px ${box.fontFace}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const metrics = ctx.measureText(edge.label);
-      const textWidth = metrics.width;
-      const textHeight = fontSize;
-      const padX = 8;
-      const padY = 5;
-      const rw = textWidth + padX * 2;
-      const rh = textHeight + padY * 2;
-      const rx = midX - rw / 2;
-      const ry = midY - rh / 2;
-      const r = 5;
+      const rx = box.x - box.width / 2;
+      const ry = box.y - box.height / 2;
+      const r = 6;
 
       ctx.beginPath();
       if (ctx.roundRect) {
-        ctx.roundRect(rx, ry, rw, rh, r);
+        ctx.roundRect(rx, ry, box.width, box.height, r);
       } else {
-        ctx.rect(rx, ry, rw, rh);
+        ctx.rect(rx, ry, box.width, box.height);
       }
-      ctx.fillStyle = edge.font.background || 'rgba(15, 18, 24, 0.96)';
+      ctx.fillStyle = 'rgba(15, 18, 24, 0.96)';
       ctx.fill();
 
       ctx.lineWidth = 1;
-      ctx.strokeStyle = edge.font.strokeColor || 'rgba(255, 255, 255, 0.25)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.stroke();
 
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#0f1218';
-      ctx.strokeText(edge.label, midX, midY);
-      ctx.fillStyle = edge.font.color && edge.font.color !== 'rgba(0,0,0,0)' ? edge.font.color : '#f8fafc';
-      ctx.fillText(edge.label, midX, midY);
+      ctx.strokeText(box.label, box.x, box.y);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(box.label, box.x, box.y);
 
       ctx.restore();
     });
