@@ -41,6 +41,18 @@
         </div>
         
         <div class="panel-content">
+          <div id="relation-nodes-nav" class="relation-nav hidden">
+            <button id="btn-from-node" class="nav-node-btn">
+              <span class="nav-label">Źródło:</span>
+              <span id="from-node-title" class="nav-title"></span>
+            </button>
+            <div class="nav-arrow"><i data-lucide="arrow-right"></i></div>
+            <button id="btn-to-node" class="nav-node-btn">
+              <span class="nav-label">Cel:</span>
+              <span id="to-node-title" class="nav-title"></span>
+            </button>
+          </div>
+
           <section class="data-block">
             <h3><i data-lucide="brain"></i> Psychologia</h3>
             <p id="node-psych"></p>
@@ -63,10 +75,10 @@
         </div>
       </aside>
 
-      <!-- Legenda: objaśnienie kolorów węzłów i typów połączeń -->
+      <!-- Legenda: objaśnienie kolorów węzłów, typów połączeń i grotów strzałek -->
       <div id="system-log" class="collapsed">
         <div class="log-header" id="log-toggle">
-          <h3><i data-lucide="list"></i> Legenda</h3>
+          <h3><i data-lucide="list"></i> Legenda i Symbole</h3>
           <i data-lucide="chevron-up" id="log-chevron"></i>
         </div>
         <div class="log-content">
@@ -90,7 +102,14 @@
               <li><span class="legend-line line-conflict"></span> Konflikt — napięcie / opozycja</li>
             </ul>
           </div>
-          <p class="legend-hint">Najedź na węzeł, aby wyróżnić jego połączenia i etykiety.</p>
+          <div class="legend-section">
+            <h4>Kierunki i Strzałki</h4>
+            <ul class="legend-list">
+              <li><span class="arrow-badge">➔</span> <strong>Wpływ Jednokierunkowy</strong> (Przyczyna ➔ Skutek)</li>
+              <li><span class="arrow-badge">⇄</span> <strong>Sprzężenie Zwrotne</strong> (Wzajemne oddziaływanie)</li>
+            </ul>
+          </div>
+          <p class="legend-hint">Kliknij w krawędź lub węzeł na grafie, aby otworzyć szczegóły i podświetlić relację.</p>
         </div>
       </div>
     </div>

@@ -10,10 +10,17 @@ export interface DomainNode {
 }
 
 export interface DomainLink {
+  id: string;
   from: string;
   to: string;
   type: 'flow' | 'awareness' | 'override' | 'conflict';
   label: string;
+  direction?: 'to' | 'from' | 'both';
+  description: string;
+  psychology: string;
+  philosophy: string;
+  science: string;
+  lifehack: string;
 }
 
 export const MIKRO_NODES: DomainNode[] = [
@@ -119,22 +126,12 @@ export const MIKRO_NODES: DomainNode[] = [
   },
   {
     id: "m11",
-    title: "Zasoby Energetyczne",
-    description: "Poziom sił witalnych – sen, jedzenie i regeneracja. Absolutna podstawa dla każdego logicznego myślenia.",
-    psychology: "Brak energii drastycznie wycina funkcje samokontroli i opanowanie nerwów, spychając nas do zachowań nawykowych.",
-    philosophy: "Nasza racjonalność nie działa w próżni. Wymaga mocnego biologicznego nośnika.",
-    science: "W mózgu z biegiem dnia gromadzi się adenozyna wywołująca zmęczenie, wypłukiwana tylko w głębokim śnie. Kora czołowa z kolei pije potężne ilości glukozy.",
-    lifehack: "Zasada HALT. Nie podejmuj życiowych decyzji kiedy jesteś Hungry (głodny), Angry, Lonely lub Tired (zmęczony).",
-    group: 'physiological'
-  },
-  {
-    id: "m12",
-    title: "Stan Biochemiczny",
-    description: "Mieszanka hormonów i zewnętrznych substancji (kofeina, alkohol), krążących aktualnie w krwiobiegu.",
-    psychology: "Farmakoterapia uczy nas, że czasem bez fizycznego wyrównania np. poziomu dopaminy, żadna rozmowa terapeutyczna nie ruszy z miejsca.",
-    philosophy: "Pragmatyczny biohacking korzysta z redukcjonizmu – poprawia jakość bycia poprzez precyzyjne interwencje w materię.",
-    science: "Kofeina nie daje energii, jedynie blokuje receptory zmęczenia (adenozyny). Alkohol działa jak depresant hamujący ośrodkowy układ nerwowy.",
-    lifehack: "Opóźnienie kofeiny o 90 minut od pobudki eliminuje popołudniowe zjazdy energetyczne.",
+    title: "Biochemia i Zasoby Metaboliczne",
+    description: "Poziom sił witalnych, sen, nawodnienie oraz krążąca mieszanka hormonów i neuroprzekaźników (dopamina, kortyzol, kofeina). Biologiczne paliwo i regulator nastroju oraz samokontroli.",
+    psychology: "Brak energii i odchylenia biochemiczne drastycznie obniżają odporność na lęk i złość, spychając umysł do odruchów nawykowych.",
+    philosophy: "Materializm biologiczny – racjonalność i duch nie działają w próżni, lecz bezwzględnie wymagają sprawnego nośnika metabolicznego.",
+    science: "Kora przedczołowa wymaga glukozy i tlenu, a poziom kortyzolu i dopaminy dyktuje próg wzbudzenia ciała migdałowatego.",
+    lifehack: "Zasada HALT i audyt biochemiczny: nie podejmuj trudnych decyzji na głodzie i zmęczeniu, a przy przewlekłym spadku zrób badania krwi.",
     group: 'physiological'
   },
   {
@@ -150,62 +147,462 @@ export const MIKRO_NODES: DomainNode[] = [
 ];
 
 export const MIKRO_LINKS: DomainLink[] = [
-  // 1. AWARENESS (Fenomenologia) - Cienkie, podświetlające z Jaźni, bez masy
-  { from: 'm1', to: 'm3', type: 'awareness', label: 'Obserwacja' },
-  { from: 'm1', to: 'm4', type: 'awareness', label: 'Obserwacja' },
-  { from: 'm1', to: 'm6', type: 'awareness', label: 'Obserwacja' },
-  { from: 'm1', to: 'm5', type: 'awareness', label: 'Zauważenie pragnienia' },
-  { from: 'm1', to: 'm7', type: 'awareness', label: 'Skanowanie Ciała' },
-  
-  // 2. FLOW (Pętle determinizmu i wymiany danych CBT)
-  { from: 'm3', to: 'm4', type: 'flow', label: 'Pętla CBT (Myśl -> Uczucie)' },
-  { from: 'm4', to: 'm6', type: 'flow', label: 'Pętla CBT (Uczucie -> Działanie)' },
-  { from: 'm6', to: 'm3', type: 'flow', label: 'Informacja zwrotna' },
-  
-  { from: 'm8', to: 'm3', type: 'flow', label: 'Schemat Poznawczy (Filtr)' },
-  { from: 'm10', to: 'm3', type: 'flow', label: 'Kategoryzacja' },
-  
-  { from: 'm4', to: 'm7', type: 'flow', label: 'Interocepcja' },
-  { from: 'm7', to: 'm5', type: 'flow', label: 'Wyzwolenie napięcia' },
-  { from: 'm9', to: 'm7', type: 'flow', label: 'Presja fizyczna' },
-  { from: 'm13', to: 'm7', type: 'flow', label: 'Koregulacja układu' },
-  
-  { from: 'm11', to: 'm2', type: 'flow', label: 'Budżet Energetyczny' },
-  { from: 'm12', to: 'm4', type: 'flow', label: 'Odchylenie chemiczne' },
-
-  // 3. OVERRIDE (Akt woli stoików, przełamanie kory czołowej)
-  { from: 'm2', to: 'm5', type: 'override', label: 'Hamowanie (PFC)' },
-  { from: 'm2', to: 'm6', type: 'override', label: 'Świadomy akt' },
-
-  // 4. CONFLICT (Dysonans, ujemna sprężyna)
-  { from: 'm8', to: 'm5', type: 'conflict', label: 'Dysonans Wewnętrzny' },
-  { from: 'm10', to: 'm4', type: 'conflict', label: 'Aleksytymia (Brak słów)' },
-
-  // --- ZAAWANSOWANE POWIĄZANIA EKO-NEURO-SOCJOLOGICZNE ---
-  // Ze Środowiska (Czynniki Zewn. / Rezonans):
-  { from: 'm9', to: 'm6', type: 'flow', label: 'Afordancje (Blokady/Zaproszenia)' },
-  { from: 'm9', to: 'm3', type: 'flow', label: 'Torowanie (Priming przestrzenny)' },
-  { from: 'm9', to: 'm1', type: 'conflict', label: 'Zawłaszczenie Uwagi' },
-  { from: 'm13', to: 'm5', type: 'flow', label: 'Instynkt Stada' },
-  { from: 'm13', to: 'm4', type: 'flow', label: 'Zaraźliwość Afektywna' },
-
-  // Z Ciała i Biochemii (Budżet energetyczny):
-  { from: 'm11', to: 'm4', type: 'flow', label: 'Podatność (Zmęczenie = lęk)' },
-  { from: 'm12', to: 'm5', type: 'flow', label: 'Hiperstymulacja (Dopamina)' },
-  { from: 'm12', to: 'm1', type: 'conflict', label: 'Rozpad Ego (DMN)' },
-
-  // Sprzężenia Zwrotne i Dysonanse Poznawcze:
-  { from: 'm2', to: 'm11', type: 'flow', label: 'Wyczerpanie decyzyjne (Ego Depletion)' },
-  { from: 'm2', to: 'm3', type: 'override', label: 'Przekierowanie Uwagi' },
-  { from: 'm3', to: 'm7', type: 'conflict', label: 'Rozdźwięk traumatyczny' },
-  { from: 'm3', to: 'm7', type: 'flow', label: 'Psychosomatyka' },
-  { from: 'm4', to: 'm8', type: 'flow', label: 'Uzasadnienie Emocjonalne' },
-
-  // Potęga Języka:
-  { from: 'm10', to: 'm4', type: 'override', label: 'Nazywanie Afektu (Affect Labeling)' },
-  { from: 'm10', to: 'm8', type: 'flow', label: 'Relatywizm Językowy' }
+  {
+    id: 'm1-m2-override',
+    from: 'm1',
+    to: 'm2',
+    type: 'override',
+    direction: 'to',
+    label: 'Świadomy Wybór Woli',
+    description: 'To moment, w którym zatrzymujesz automatyzm i mówisz sobie: zaraz, nie muszę reagować odruchowo, sam wybiorę, co teraz zrobię.',
+    psychology: 'Przejście z automatycznego reagowania na bodźce do celowego kierowania samokontrolą.',
+    philosophy: 'Epiktet i pojęcie prohairesis – wewnętrzna przestrzeń wyboru leżąca między bodźcem a reakcją.',
+    science: 'Aktywacja kory grzbietowo-bocznej (dlPFC) wyciszająca odruchy podkorowe.',
+    lifehack: 'Przed reakcją policz w duchu do 3 i poczuj, że to Ty naciskasz przycisk akcji.'
+  },
+  {
+    id: 'm1-m3-awareness',
+    from: 'm1',
+    to: 'm3',
+    type: 'awareness',
+    direction: 'to',
+    label: 'Obserwacja Myśli',
+    description: 'Patrzysz na swoje myśli jak na liście płynące rzeką – widzisz je, ale nie wskakujesz do wody.',
+    psychology: 'Defuzja poznawcza (ACT). Rozdzielenie tożsamości od przepływających myśli.',
+    philosophy: 'Fenomenologia Husserla – przyglądanie się zjawiskom w umyśle bez wydawania sądu.',
+    science: 'Wyciszenie SIeci Wzbudzeń Podstawowych (DMN) na rzecz kory przedczołowej.',
+    lifehack: 'Mów w duchu: Zauważam myśl, że... zamiast: Ja jestem...'
+  },
+  {
+    id: 'm1-m4-awareness',
+    from: 'm1',
+    to: 'm4',
+    type: 'awareness',
+    direction: 'to',
+    label: 'Obserwacja Afektu',
+    description: 'Pozwalasz emocji być w ciele jak pogodzie za oknem – nie próbujesz jej zatrzymać, czekasz aż przejdzie.',
+    psychology: 'Uważność emocjonalna i Radykalna Akceptacja (DBT).',
+    philosophy: 'Spinoza – poznanie afektu bez oskarżania siebie o jego obecność.',
+    science: 'Aktywacja kory przedczołowej redukuje reaktywność współczulną i umożliwia gaśnięcie afektu.',
+    lifehack: 'Wizualizuj emocję jako falę – pozwól jej wzrosnąć i opadnąć bez oporu.'
+  },
+  {
+    id: 'm1-m5-awareness',
+    from: 'm1',
+    to: 'm5',
+    type: 'awareness',
+    direction: 'to',
+    label: 'Zauważenie Pragnienia',
+    description: 'Patrzysz na nagłą ochotę sięgnięcia po telefon jak na falę na oceanie – wiesz, że sama opadnie.',
+    psychology: 'Technika Urge Surfing z terapii uzależnień.',
+    philosophy: 'Stoicka wstrzemięźliwość – obserwacja żądzy bez ulegania jej dyktatowi.',
+    science: 'Przerwanie automatycznego sygnału z jądra półleżącego do obwodów ruchowych.',
+    lifehack: 'Nastaw stoper na 3 minuty i obserwuj impuls – w większości przypadków sama opadnie.'
+  },
+  {
+    id: 'm1-m6-awareness',
+    from: 'm1',
+    to: 'm6',
+    type: 'awareness',
+    direction: 'to',
+    label: 'Uważność w Działaniu',
+    description: 'Gdy zmywasz naczynia, po prostu zmywasz naczynia – jesteś w 100% obecny w tym, co robią Twoje dłonie.',
+    psychology: 'Mindful Action – pełna obecność w prostej czynności fizycznej.',
+    philosophy: 'Praktyka Zen – siekanie drewna i noszenie wody jako pełnia bycia.',
+    science: 'Zwiększenie spójności sieci czuciowo-ruchowej z korą przedczołową.',
+    lifehack: 'Skup się na dotyku i temperaturze wody podczas mycia rąk.'
+  },
+  {
+    id: 'm1-m7-awareness',
+    from: 'm1',
+    to: 'm7',
+    type: 'awareness',
+    direction: 'to',
+    label: 'Skanowanie Ciała',
+    description: 'Sprawdzasz stan swojego ciała tak, jak kierowca sprawdza wskaźniki na desce rozdzielczej samochodu.',
+    psychology: 'Body Scan – podstawa redukcji stresu opartej na uważności (MBSR).',
+    philosophy: 'Merleau-Ponty – zamieszkiwanie własnego ciała.',
+    science: 'Stymulacja kory wyspy (insula) przetwarzającej sygnały z wnętrza organizmu.',
+    lifehack: 'Zamknij oczy i przeskanuj uwagę od czubka głowy do stóp.'
+  },
+  {
+    id: 'm2-m1-flow',
+    from: 'm2',
+    to: 'm1',
+    type: 'flow',
+    direction: 'to',
+    label: 'Odzyskanie Przytomności',
+    description: 'Decydujesz się przestać pędzić i wziąć głęboki oddech, by rozejrzeć się, gdzie w ogóle jesteś.',
+    psychology: 'Wyjście z automatycznego pilota na rzecz świadomej metakognicji.',
+    philosophy: 'Husserlowskie epoche – zawieszenie biegu spraw na rzecz refleksji.',
+    science: 'Przełączenie aktywacji z obwodów domyślnych na sieć kontroli wykonawczej.',
+    lifehack: 'Ustaw cichy sygnał raz na 2 godziny z pytaniem: Co teraz robię i dlaczego?'
+  },
+  {
+    id: 'm2-m3-override',
+    from: 'm2',
+    to: 'm3',
+    type: 'override',
+    direction: 'to',
+    label: 'Przekierowanie Skupienia',
+    description: 'Zamiast rozmyślać o przykrości sprzed tygodnia, zmuszasz umysł do skupienia się na pracy.',
+    psychology: 'Kontrola uwagi w funkcjach wykonawczych.',
+    philosophy: 'William James – cechą genialnej woli jest zdolność powracania uwagą do celu.',
+    science: 'Grzbietowa kora przedczołowa wycisza niepotrzebne pętle myślowe.',
+    lifehack: 'Gdy uciekasz myślami, wypowiedz głośno jedno słowo-klucz związane z zadaniem.'
+  },
+  {
+    id: 'm2-m5-override',
+    from: 'm2',
+    to: 'm5',
+    type: 'override',
+    direction: 'to',
+    label: 'Blokada Impulsu (PFC)',
+    description: 'Widzisz ciastko, masz wielką ochotę je zjeść, ale zabraniasz sobie wyciągnięcia po nie ręki.',
+    psychology: 'Hamowanie reakcji (Response Inhibition) – powstrzymanie odruchu.',
+    philosophy: 'Stoicki imperatyw samokontroli nad ślepym pożądaniem.',
+    science: 'Brzuszno-boczna kora przedczołowa (vlPFC) wysyła sygnał wyciszający prążkowie.',
+    lifehack: 'Schowaj dłonie do kieszeni i odczekaj 5 sekund.'
+  },
+  {
+    id: 'm2-m6-override',
+    from: 'm2',
+    to: 'm6',
+    type: 'override',
+    direction: 'to',
+    label: 'Inicjacja Czynu',
+    description: 'Nie masz ochoty wstać z łóżka, ale zrzucasz kołdrę i stawiasz stopy na podłodze.',
+    psychology: 'Przełamywanie oporu inicjacji działania (aktywacja behawioralna).',
+    philosophy: 'Zasadniczy akt woli u Bergsona.',
+    science: 'Projekcje z dlPFC do dodatkowej kory ruchowej (SMA) uruchamiające ruch.',
+    lifehack: 'Odlicz 5-4-3-2-1 i wykonaj ruch bez dyskusji z umysłem.'
+  },
+  {
+    id: 'm2-m7-override',
+    from: 'm2',
+    to: 'm7',
+    type: 'override',
+    direction: 'to',
+    label: 'Kontrola Oddechu',
+    description: 'Czujesz stres, więc celowo zwalniasz oddech i rozluźniasz ramiona, by zmusić ciało do spokoju.',
+    psychology: 'Celowa regulacja somatyczna top-down.',
+    philosophy: 'Panowanie nad machiną ciała u Kartezjusza.',
+    science: 'Świadoma praca przepony aktywuje włókna nerwu błędnego obniżające tętno.',
+    lifehack: 'Zrób 3 oddechy: 4 sekundy wdech, 7 zatrzymanie, 8 wydech.'
+  },
+  {
+    id: 'm2-m11-flow',
+    from: 'm2',
+    to: 'm11',
+    type: 'flow',
+    direction: 'to',
+    label: 'Zużycie Paliwa Decyzyjnego',
+    description: 'Im więcej trudnych decyzji podejmujesz w ciągu dnia, tym bardziej czujesz się wykończony wieczorem.',
+    psychology: 'Teoria wyczerpywania się zasobów woli (Ego Depletion).',
+    philosophy: 'Ekonomia sił duchowych u Nietzschego.',
+    science: 'Spadek glukozy i gromadzenie się adenozyny w korze czołowej.',
+    lifehack: 'Zmniejsz liczbę decyzji rano – przygotuj ubrania dzień wcześniej.'
+  },
+  {
+    id: 'm3-m1-conflict',
+    from: 'm3',
+    to: 'm1',
+    type: 'conflict',
+    direction: 'to',
+    label: 'Fuzja Poznawcza',
+    description: 'Przerażająca myśl tak bardzo Cię straszy, że zapominasz, że to tylko myśl i traktujesz ją jak fakt.',
+    psychology: 'Fuzja poznawcza (Cognitive Fusion) w terapii ACT.',
+    philosophy: 'Zagubienie w świecie wyobrażeń (Spinoza).',
+    science: 'Nadaktywność DMN przysłaniająca korę obwodową.',
+    lifehack: 'Wyobraź sobie straszną myśl napisaną śmieszną czcionką.'
+  },
+  {
+    id: 'm3-m4-flow',
+    from: 'm3',
+    to: 'm4',
+    type: 'flow',
+    direction: 'to',
+    label: 'Pętla CBT (Myśl -> Uczucie)',
+    description: 'Gdy pomyślisz szef mnie wywali, natychmiast czujesz ścisk w żołądku i strach.',
+    psychology: 'Model A-B-C Becka w Terapii Poznawczo-Behawioralnej.',
+    philosophy: 'Epiktet – zdarzenia nie mają wartości, dopóki umysł nie nada im sądu.',
+    science: 'Sygnały glutaminergiczne z kory czołowej stymulujące ciało migdałowate.',
+    lifehack: 'Sprawdź fakt: Czy mam dowody na tę myśl, czy to spekulacja?'
+  },
+  {
+    id: 'm3-m6-override',
+    from: 'm3',
+    to: 'm6',
+    type: 'override',
+    direction: 'to',
+    label: 'Realizacja Intencji',
+    description: 'Przypominasz sobie muszę kupić chleb i skręcasz autem do sklepu.',
+    psychology: 'Przekład planu poznawczego na skrypt wykonawczy.',
+    philosophy: 'Kantowska koncepcja rozumu praktycznego.',
+    science: 'Przekazywanie instrukcji z dlPFC do kory przedruchowej.',
+    lifehack: 'Zapisz plan w formule krok-po-kroku na kartce.'
+  },
+  {
+    id: 'm3-m7-flow',
+    from: 'm3',
+    to: 'm7',
+    type: 'flow',
+    direction: 'to',
+    label: 'Psychosomatyka Stresu',
+    description: 'Zamartwianie się sprawami sprawia, że po dwóch godzinach boli Cię kark i głowa.',
+    psychology: 'Reakcja psychosomatyczna na przewlekłe ruminacje.',
+    philosophy: 'Kartezjańska spójność substancji myślanej i rozciągłej.',
+    science: 'Przewlekła aktywacja osi HPA wyrzuca kortyzol i obkurcza naczynia.',
+    lifehack: 'Gdy zauważysz ruminacje, zrób 10 przysiadów.'
+  },
+  {
+    id: 'm3-m8-flow',
+    from: 'm3',
+    to: 'm8',
+    type: 'flow',
+    direction: 'to',
+    label: 'Krystalizacja Schematu',
+    description: 'Powtarzanie sobie nigdy mi się nie uda sprawia, że po miesiącu zaczynasz w to głęboko wierzyć.',
+    psychology: 'Utrwalanie ruminacji i wyuczona beznadziejność (Seligman).',
+    philosophy: 'Nawyk myślowy jako druga natura (Arystoteles).',
+    science: 'Długotrwałe wzmocnienie synaptyczne (LTP).',
+    lifehack: 'Przerywaj ruminacje w zarodku – nie pozwalaj myśli krążyć dłużej niż minutę.'
+  },
+  {
+    id: 'm4-m1-conflict',
+    from: 'm4',
+    to: 'm1',
+    type: 'conflict',
+    direction: 'to',
+    label: 'Zalew Afektywny',
+    description: 'Przytłaczająca fala gniewu lub lęku zdmuchuje perspektywę obserwatora.',
+    psychology: 'Porwanie emocjonalne (Amygdala Hijack).',
+    philosophy: 'Niewola namiętności u Spinozy.',
+    science: 'Gwałtowny skok aktywności ciała migdałowatego odłączający PFC.',
+    lifehack: 'Dotknij zimnej powierzchni lub przemyj twarz zimną wodą.'
+  },
+  {
+    id: 'm4-m3-flow',
+    from: 'm4',
+    to: 'm3',
+    type: 'flow',
+    direction: 'to',
+    label: 'Uzasadnienie Emocjonalne',
+    description: 'Odczuwany lęk sprawia, że umysł dorabia katastroficzne scenariusze, by go wyjaśnić.',
+    psychology: 'Błąd poznawczy emotional reasoning.',
+    philosophy: 'Hume – rozum jest niewolnikiem namiętności.',
+    science: 'Układ limbiczny wymusza spójność afektywną w korze czołowej.',
+    lifehack: 'Powiedz: Czuję lęk, ale to nie oznacza, że istnieje zagrożenie.'
+  },
+  {
+    id: 'm4-m5-flow',
+    from: 'm4',
+    to: 'm5',
+    type: 'flow',
+    direction: 'to',
+    label: 'Zasilanie Impulsu',
+    description: 'Intensywna złość błyskawicznie zamienia się w impuls do ataku lub uderzenia w stoł.',
+    psychology: 'Wyzwolenie odruchu behawioralnego przez afekt.',
+    philosophy: 'Spinozjański conatus napędzany afektem.',
+    science: 'Układ limbiczny wyzwalający pobudzenie ruchowe w pniu mózgu.',
+    lifehack: 'Działanie przeciwne z DBT – zrób celowo miękki krok wycofania.'
+  },
+  {
+    id: 'm4-m6-flow',
+    from: 'm4',
+    to: 'm6',
+    type: 'flow',
+    direction: 'to',
+    label: 'Motywacja Afektywna',
+    description: 'Emocje przygotowują ciało do przytulenia kogoś lub ucieczki z miejsca zagrożenia.',
+    psychology: 'Terapia EFT – emocje jako wektory motywacyjne.',
+    philosophy: 'Afekt jako źródło wektora życiowego.',
+    science: 'Aktywacja autonomicznogo układu nerwowego do działania.',
+    lifehack: 'Zauważ, do jakiego czynu popycha Cię dana emocja.'
+  },
+  {
+    id: 'm4-m7-flow',
+    from: 'm4',
+    to: 'm7',
+    type: 'flow',
+    direction: 'to',
+    label: 'Somatyzacja Afektu',
+    description: 'Smutek staje się ciężarem w klatce piersiowej, a lęk ściśniętym żołądkiem.',
+    psychology: 'Terapia Somatic Experiencing (Peter Levine).',
+    philosophy: 'Merleau-Ponty – przeżywające ciało.',
+    science: 'Wyrzut kortyzolu i zmiana tonusu naczyniowego.',
+    lifehack: 'Skieruj łagodną uwagę w punkt somatycznego napięcia.'
+  },
+  {
+    id: 'm4-m10-conflict',
+    from: 'm4',
+    to: 'm10',
+    type: 'conflict',
+    direction: 'to',
+    label: 'Aleksytymia (Paraliż Mowy)',
+    description: 'Przytłaczająca emocja sprawia, że brakuje Ci słów, by opisać co czujesz.',
+    psychology: 'Aleksytymia traumatyczna – brak słów dla afektu.',
+    philosophy: 'Levinas – to co niewyrażalne w uderzeniu cierpienia.',
+    science: 'Odłączenie funkcjonalne ciała migdałowatego od pola Broca.',
+    lifehack: 'Opisz emocję kolorem lub metaforą, gdy brakuje słów.'
+  },
+  {
+    id: 'm5-m2-conflict',
+    from: 'm5',
+    to: 'm2',
+    type: 'conflict',
+    direction: 'to',
+    label: 'Przełamanie Woli (Pokusa)',
+    description: 'Potężny skok ochoty wyłącza rozsądek i zmusza wolę do uległości.',
+    psychology: 'Porażka samokontroli pod wpływem dopaminy.',
+    philosophy: 'Schopenhauer – ślepy pęd wygrywający z intelektem.',
+    science: 'Wyrzut dopaminy w jadrze półleżącym wyłącza kontrolę PFC.',
+    lifehack: 'Zmień otoczenie – nie walcz z impulsem w jego zasięgu.'
+  },
+  {
+    id: 'm5-m6-flow',
+    from: 'm5',
+    to: 'm6',
+    type: 'flow',
+    direction: 'to',
+    label: 'Działanie Impulsywne',
+    description: 'Sęgasz po telefon bez myślenia natychmiast, gdy poczujesz sekundę nudy.',
+    psychology: 'Odruch automatyczny pominięty przez refleksję.',
+    philosophy: 'Bezwolna determinacja fizyczna.',
+    science: 'Bezpośredni szlak prążkowie-kora ruchowa.',
+    lifehack: 'Stwórz tarcie – połóż telefon w drugim pokoju.'
+  },
+  {
+    id: 'm6-m3-flow',
+    from: 'm6',
+    to: 'm3',
+    type: 'flow',
+    direction: 'to',
+    label: 'Informacja Zwrotna z Działania',
+    description: 'Zrobienie pierwszego kroku daje twardy dowód, który zmienia Twoje myślenie.',
+    psychology: 'Eksperymenty behawioralne w CBT.',
+    philosophy: 'Pragmatyzm Peirce a – prawda testowana w działaniu.',
+    science: 'Kodowanie błędu predykcji dopaminergicznej po akcji.',
+    lifehack: 'Traktuj działanie jako zbieranie danych, nie jako sprawdzian.'
+  },
+  {
+    id: 'm6-m4-flow',
+    from: 'm6',
+    to: 'm4',
+    type: 'flow',
+    direction: 'to',
+    label: 'Sprzężenie Zwrotne Ciała',
+    description: 'Uśmiech i wyprostowana postawa po kilku chwilach poprawiają odczuwany nastrój.',
+    psychology: 'Hipoteza sprzężenia zwrotnego postawy (Power Posing).',
+    philosophy: 'William James – jest nam smutno, bo płaczemy.',
+    science: 'Receptory mięśniowe wysyłające sygnał bezpieczeństwa do kory wyspy.',
+    lifehack: 'Wyprostuj plecy i otwórz dłonie na 60 sekund.'
+  },
+  {
+    id: 'm7-m4-flow',
+    from: 'm7',
+    to: 'm4',
+    type: 'flow',
+    direction: 'to',
+    label: 'Interocepcja (Ciało -> Afekt)',
+    description: 'Ściśnięty żołądek z powodu głodu zostaje zinterpretowany przez mózg jako lęk.',
+    psychology: 'Teoria konstruowanych emocji (Barrett).',
+    philosophy: 'Nietzsche – ciało jako wielki rozum.',
+    science: 'Kora wyspy budująca afekt z sygnałów narządowych.',
+    lifehack: 'Gdy czujesz niepokój, sprawdź najpierw czy nie jesteś po prostu głodny.'
+  },
+  {
+    id: 'm8-m3-flow',
+    from: 'm8',
+    to: 'm3',
+    type: 'flow',
+    direction: 'to',
+    label: 'Filtr Poznawczy (Schemat)',
+    description: 'Głębokie przekonanie, że ludzie są wrodzy, sprawia że zwykły uśmiech uznajesz za kpinę.',
+    psychology: 'Terapia Schematu (Young) i zniekształcenia poznawcze.',
+    philosophy: 'Kantowskie kategorie rozumu filtrujące rzeczywistość.',
+    science: 'Sztywne ścieżki synaptyczne faworyzujące znane interpretacje.',
+    lifehack: 'Zapytaj: Z jakiej ukrytej reguły wyrosła ta myśl?'
+  },
+  {
+    id: 'm9-m1-conflict',
+    from: 'm9',
+    to: 'm1',
+    type: 'conflict',
+    direction: 'to',
+    label: 'Zawłaszczenie Uwagi',
+    description: 'Głośny hałas lub powiadomienie bezczelnie wyrywają Cię z głębokiego skupienia.',
+    psychology: 'Dystrakcja środowiskowa i skrajne przebodźcowanie.',
+    philosophy: 'Presja fizyczna otoczenia.',
+    science: 'Odruch orientacyjny wyzwalany przez jądra pnia mózgu.',
+    lifehack: 'Włącz tryb nie przeszkadzać na czas głębokiej pracy.'
+  },
+  {
+    id: 'm9-m6-flow',
+    from: 'm9',
+    to: 'm6',
+    type: 'flow',
+    direction: 'to',
+    label: 'Afordancje Przestrzenne',
+    description: 'Książka leżąca na poduszce zachęca do czytania, a telefon na biurku do rozpraszania.',
+    psychology: 'Architektura wyboru w psychologii środowiskowej.',
+    philosophy: 'Determinizm materialny otoczenia.',
+    science: 'Bodźce wzrokowe aktywujące reprezentacje motoryczne.',
+    lifehack: 'Ułatwiaj dobre zachowania i stawiaj przeszkody złym.'
+  },
+  {
+    id: 'm10-m4-override',
+    from: 'm10',
+    to: 'm4',
+    type: 'override',
+    direction: 'to',
+    label: 'Nazywanie Afektu (Affect Labeling)',
+    description: 'Nazwanie emocji precyzyjnym słowem natychmiast obniża jej natężenie.',
+    psychology: 'Affect Labeling w terapii poznawczej i ACT.',
+    philosophy: 'Wittgenstein – granice języka granicami świata.',
+    science: 'Pole Broca wyciszające ciało migdałowate.',
+    lifehack: 'Zamiast jest źle powiedz: czuję rozczarowanie.'
+  },
+  {
+    id: 'm11-m2-flow',
+    from: 'm11',
+    to: 'm2',
+    type: 'flow',
+    direction: 'to',
+    label: 'Zasilanie Funkcji Wykonawczych',
+    description: 'Sen i jedzenie dają kora czołowej siłę niezbędną do trzymania nerwów na wodzy.',
+    psychology: 'Budżetowanie metaboliczne samokontroli.',
+    philosophy: 'Materializm biologiczny.',
+    science: 'Dopływ glukozy niezbędny dla pracy vlPFC.',
+    lifehack: 'Nie podejmuj kluczowych ustaleń na zmęczeniu (HALT).'
+  },
+  {
+    id: 'm11-m4-flow',
+    from: 'm11',
+    to: 'm4',
+    type: 'flow',
+    direction: 'to',
+    label: 'Modulacja Biochemiczna',
+    description: 'Poziom hormonów, glukozy i neuroprzekaźników dyktuje bazowy poziom nerwowości lub spokoju w danym dniu.',
+    psychology: 'Biologiczne i metaboliczne podłoże zmienności nastroju i afektu.',
+    philosophy: 'Redukcjonizm biologiczny.',
+    science: 'Stężenie kortyzolu, dopaminy i glukozy stymulujące ciało migdałowate i korę czołową.',
+    lifehack: 'Zrób pakiet badań krwi przy przewlekłym spadku nastroju lub energii.'
+  },
+  {
+    id: 'm13-m7-flow',
+    from: 'm13',
+    to: 'm7',
+    type: 'flow',
+    direction: 'to',
+    label: 'Koregulacja Somatyczna',
+    description: 'Obecność spokojnej osoby wycisza kołatanie serca i układ nerwowy.',
+    psychology: 'Teoria poliwagalna Stephena Porgesa.',
+    philosophy: 'Relacja Ja-Ty u Martina Bubera.',
+    science: 'Gałąź brzuszna nerwu błędnego obniżająca tętno.',
+    lifehack: 'Szukaj spokojnego kontaktu wzrokowego w strefie stresu.'
+  }
 ];
-
 
 export const MAKRO_NODES: DomainNode[] = [
   {
@@ -266,7 +663,7 @@ export const MAKRO_NODES: DomainNode[] = [
     philosophy: "Język to dom bycia. Tworzy sferę wokół nas (membranę), oddzielając nasz rdzeń od surowej, niewyrażalnej zewnętrzności.",
     science: "Neurolingwistyka pokazuje, że gramatyka wpływa na kategoryzowanie zdarzeń i postrzeganie winy.",
     lifehack: "Zmień główne metafory. Gdy życie to 'poligon', podświadomość wchodzi w wieczny tryb oblężenia.",
-    group: 'cognitive' // W renderingu dostanie customowy wygląd membrany!
+    group: 'cognitive'
   },
   {
     id: "ma7",
@@ -296,7 +693,7 @@ export const MAKRO_NODES: DomainNode[] = [
     philosophy: "Zadanie wyznaczenia sensu w świecie bezwzględnej wolności (egzystencjalizm).",
     science: "Obecność celu wiąże się ze zwiększoną plastycznością przedczołową i niższym ryzkiem otępienia w podeszłym wieku.",
     lifehack: "Zrób rygorystyczny 'Test Pogrzebu'. Bolesne, ale natychmiast układa wartości życiowe w hierarchię.",
-    group: 'executive' // W renderingu dostanie customową grawitację!
+    group: 'executive'
   },
   {
     id: "ma10",
@@ -306,7 +703,7 @@ export const MAKRO_NODES: DomainNode[] = [
     philosophy: "Amor Fati - radykalna akceptacja rzeczywistości. Zdarzenia po prostu nadchodzą. To Ty nadajesz im destrukcyjne znaczenie.",
     science: "Termodynamika - żaden układ nie zachowa porządku w nieskończoność. Nie da się przewidzieć losu z powodu zbyt wielkiej liczby zmiennych.",
     lifehack: "Zawsze zachowuj margines błędu. W zasobach finansowych, emocjonalnych i czasowych licz się z anomalią.",
-    group: 'awareness' // W renderingu dostanie customowy ruch wolnego elektronu!
+    group: 'awareness'
   },
   {
     id: "ma11",
@@ -321,22 +718,108 @@ export const MAKRO_NODES: DomainNode[] = [
 ];
 
 export const MAKRO_LINKS: DomainLink[] = [
-  // Rdzeń Epigenetyczny
-  { from: 'ma1', to: 'ma4', type: 'flow', label: 'Pamięć Komórkowa (Epigenetyka)' },
-  // Wpływy systemowe
-  { from: 'ma5', to: 'ma4', type: 'flow', label: 'Dziedziczenie Traum' },
-  { from: 'ma5', to: 'ma3', type: 'flow', label: 'Współdzielony Cień' },
-  { from: 'ma2', to: 'ma1', type: 'flow', label: 'Wektor fizjologiczny (Adaptacja)' },
-  
-  // Wpływ kultury (zewnątrz)
-  { from: 'ma8', to: 'ma11', type: 'flow', label: 'Infostruktura' },
-  { from: 'ma8', to: 'ma5', type: 'flow', label: 'Ewolucja ról społecznych' },
-  
-  // Językowa membrana
-  { from: 'ma6', to: 'ma3', type: 'conflict', label: 'Granice poznania (Kategoryzacja)' },
-  
-  // Rozwój i Kryzysy
-  { from: 'ma7', to: 'ma5', type: 'conflict', label: 'Rozpad lojalności' },
-  
-  // (Atraktor i Chaos nie potrzebują tu sztywnych linków z 'flow', bo są sterowane przez customową grawitację)
+  {
+    id: 'ma1-ma4-flow',
+    from: 'ma1',
+    to: 'ma4',
+    type: 'flow',
+    direction: 'to',
+    label: 'Pamięć Komórkowa',
+    description: 'Podłoże biologiczne koduje ślady po głębokim stresie w tkankach i ekspresji genów.',
+    psychology: 'Epigenetyczne zakodowanie urazu w podatności komórkowej.',
+    philosophy: 'Ciało jako żywy archiwista historii gatunkowej.',
+    science: 'Modyfikacja metylacji DNA pod wpływem kortyzolu.',
+    lifehack: 'Dbaj o bazowy stan biologiczny, by wspomóc leczenie urazów.'
+  },
+  {
+    id: 'ma5-ma4-flow',
+    from: 'ma5',
+    to: 'ma4',
+    type: 'flow',
+    direction: 'to',
+    label: 'Dziedziczenie Traum',
+    description: 'Nierozwiązany uraz rodziców przekazywany jest dzieciom przez styl wychowania i biologię.',
+    psychology: 'Trauma transgeneracyjna w psychoterapii systemowej.',
+    philosophy: 'Dziedziczne obciążenia rodu.',
+    science: 'Wpływ stresu rodzicielskiego na rozwój układu limbicznego niemowlęcia.',
+    lifehack: 'Nazwij i przerwij szkodliwy schemat, by nie przekazać go dalej.'
+  },
+  {
+    id: 'ma5-ma3-conflict',
+    from: 'ma5',
+    to: 'ma3',
+    type: 'conflict',
+    direction: 'both',
+    label: 'Współdzielony Cień',
+    description: 'Rodzinne wyparcia i milczące tabu zasilają indywidualny cień psychiczny.',
+    psychology: 'Cień rodzinny w analizie jungowskiej.',
+    philosophy: 'Niewidzialne lojalności rodowe.',
+    science: 'Wzorzec nieświadomych mikroekspresji opiekunów w dzieciństwie.',
+    lifehack: 'Zbadaj co w Twojej rodzinie było tematem zakazanym.'
+  },
+  {
+    id: 'ma2-ma1-flow',
+    from: 'ma2',
+    to: 'ma1',
+    type: 'flow',
+    direction: 'to',
+    label: 'Wektor Adaptacyjny',
+    description: 'Klimat i jakość otoczenia bezpośrednio modyfikują funkcjonowanie Twojego organizmu.',
+    psychology: 'Wpływ środowiska geograficznego na stan psychiczny.',
+    philosophy: 'Determinizm geograficzny.',
+    science: 'Synteza witaminy D3 i wpływ zanieczyszczeń na układ odpornościowy.',
+    lifehack: 'Spędzaj minimum 20 minut dziennie na świeżym powietrzu.'
+  },
+  {
+    id: 'ma8-ma11-flow',
+    from: 'ma8',
+    to: 'ma11',
+    type: 'flow',
+    direction: 'both',
+    label: 'Infostruktura',
+    description: 'Duch epoki tworzy technologię, która z kolei redefiniuje duch czasów.',
+    psychology: 'Uzależnienie od bodźców cyfrowych w nowoczesności.',
+    philosophy: 'Teoria mediów McLuhana – medium jest przekazem.',
+    science: 'Przebudowa szlaków dopaminowych przez algorytmy sieciowe.',
+    lifehack: 'Rób cyfrowy detoks raz w tygodniu.'
+  },
+  {
+    id: 'ma8-ma5-flow',
+    from: 'ma8',
+    to: 'ma5',
+    type: 'flow',
+    direction: 'to',
+    label: 'Ewolucja Ról Społecznych',
+    description: 'Normy socjologiczne danych czasów dyktują podział ról w rodzinie i grupie.',
+    psychology: 'Wpływ dyskursu kulturowego na tożsamość rolizowaną.',
+    philosophy: 'Foucault – władza dyskursu nad zachowaniem jednostek.',
+    science: 'Presja społeczna modulująca poziom hormonów przywiązania.',
+    lifehack: 'Sprawdź, które ze swoich ról przyjąłeś bezrefleksyjnie ze społeczeństwa.'
+  },
+  {
+    id: 'ma6-ma3-conflict',
+    from: 'ma6',
+    to: 'ma3',
+    type: 'conflict',
+    direction: 'both',
+    label: 'Granice Poznania',
+    description: 'Język i kultura próbują schwytać w słowa nieświadome pędy, tworząc napięcie.',
+    psychology: 'Symbolizacja nieświadomego w psychoanalizie.',
+    philosophy: 'Wittgenstein – to o czym nie można mówić, o tym należy milczeć.',
+    science: 'Sprzężenie między korą językową a strukturami głębokimi mózgu.',
+    lifehack: 'Nie próbuj każdego odczucia racjonalizować słowami.'
+  },
+  {
+    id: 'ma7-ma5-conflict',
+    from: 'ma7',
+    to: 'ma5',
+    type: 'conflict',
+    direction: 'both',
+    label: 'Rozpad Lojalności',
+    description: 'Dojrzewanie i kryzys indywidualny zmuszają do zakwestionowania sztywnych reguł rodowych.',
+    psychology: 'Indywiduacja według Junga – wychodzenie ze skryptu rodzinnego.',
+    philosophy: 'Bunt egzystencjalny przeciw tradycji.',
+    science: 'Przebudowa połączeń synaptycznych w korze przedczołowej u progu dojrzałości.',
+    lifehack: 'Zaakceptuj fakt, że rozwój czasem wymaga niepoprawności wobec oczekiwań innych.'
+  }
 ];

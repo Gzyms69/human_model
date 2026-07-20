@@ -229,13 +229,14 @@ div.vis-tooltip {
   color: var(--accent);
 }
 
-/* DZIENNICZEK */
+/* LEGENDA - STAŁY SYSTEM DOLNY */
 #system-log {
   position: absolute;
   bottom: 0;
-  left: 2.5rem;
-  width: 380px;
-  max-width: calc(100vw - 5rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 440px;
+  max-width: calc(100vw - 2rem);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-bottom: none;
@@ -245,11 +246,85 @@ div.vis-tooltip {
   -webkit-backdrop-filter: blur(20px);
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 15;
-  box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+  box-shadow: 0 -5px 25px rgba(0,0,0,0.35);
 }
 
 #system-log.collapsed {
-  transform: translateY(calc(100% - 50px));
+  transform: translate(-50%, calc(100% - 46px));
+}
+
+.arrow-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: #00e5ff;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+/* NAVIGACJA RELACJI W PANELU BOCZNYM */
+.relation-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.relation-nav.hidden {
+  display: none;
+}
+
+.nav-node-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.nav-node-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+}
+
+.nav-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.nav-title {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.nav-arrow {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .log-header {
@@ -502,5 +577,31 @@ div.vis-tooltip {
   100% {
     transform: translate(-50%, -50%) scale(1);
     opacity: 0;
+  }
+}
+
+/* RESPONSYWNOŚĆ MOBILNA */
+@media (max-width: 768px) {
+  #side-panel {
+    width: 100vw;
+    max-width: 100vw;
+    padding: 1.5rem;
+    z-index: 40;
+  }
+
+  #system-log {
+    width: calc(100vw - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+    z-index: 30;
+  }
+
+  #details-bar {
+    z-index: 25;
+  }
+
+  /* Kiedy panel boczny jest otwarty na mobilce, chowamy legendę i details bar */
+  #side-panel:not(.hidden) ~ #system-log,
+  #side-panel:not(.hidden) ~ #details-bar {
+    display: none !important;
   }
 }
