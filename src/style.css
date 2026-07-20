@@ -31,6 +31,7 @@ body {
   flex-direction: column;
   height: 100%;
   position: relative;
+  overflow: hidden;
 }
 
 /* TOP BAR */
@@ -229,14 +230,13 @@ div.vis-tooltip {
   color: var(--accent);
 }
 
-/* LEGENDA - STAŁY SYSTEM DOLNY */
+/* LEGENDA - DOLNY PANEL WEWNĄTRZ FLEX CONTAINERA */
 #system-log {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
+  flex-shrink: 0;
   width: 440px;
   max-width: calc(100vw - 1rem);
+  margin: 0 auto;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-bottom: none;
@@ -244,10 +244,8 @@ div.vis-tooltip {
   border-top-right-radius: 12px;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 30;
   box-shadow: 0 -5px 25px rgba(0,0,0,0.35);
-  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 #system-log.collapsed .log-content {
@@ -557,7 +555,7 @@ div.vis-tooltip {
 
 /* RESPONSYWNOŚĆ MOBILNA I SPÓJNY UKŁAD PANELÓW */
 #details-bar {
-  position: fixed;
+  position: absolute;
   top: 50%;
   right: 0;
   transform: translateY(-50%);
@@ -599,10 +597,5 @@ div.vis-tooltip {
   #system-log {
     width: calc(100vw - 1.5rem);
     max-width: calc(100vw - 1.5rem);
-    z-index: 20;
-  }
-
-  #details-bar {
-    z-index: 25;
   }
 }
