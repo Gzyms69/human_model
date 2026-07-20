@@ -583,10 +583,12 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       label: string;
       x: number;
       y: number;
+      angle: number;
       width: number;
       height: number;
       fontSize: number;
       fontFace: string;
+      borderColor: string;
     }
 
     const boxes: LabelBox[] = [];
@@ -600,17 +602,29 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const toPos = positions[edge.to];
         if (!fromPos || !toPos) return;
 
-        let fraction = 0.5;
+        const dx = toPos.x - fromPos.x;
+        const dy = toPos.y - fromPos.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+
+        const tx = dx / len;
+        const ty = dy / len;
+        const nx = -ty;
+        const ny = tx;
+
+        let normalOffset = 20;
         if (count > 1) {
-          const step = 0.35 / (count - 1);
-          fraction = 0.325 + index * step;
-          if (edge.from > edge.to) {
-            fraction = 1 - fraction;
-          }
+          normalOffset = (index === 0 ? -1 : 1) * 24;
         }
 
-        const x = fromPos.x + (toPos.x - fromPos.x) * fraction;
-        const y = fromPos.y + (toPos.y - fromPos.y) * fraction;
+        const midX = fromPos.x + dx * 0.5;
+        const midY = fromPos.y + dy * 0.5;
+
+        const x = midX + nx * normalOffset;
+        const y = midY + ny * normalOffset;
+
+        let angle = Math.atan2(dy, dx);
+        if (angle > Math.PI / 2) angle -= Math.PI;
+        if (angle < -Math.PI / 2) angle += Math.PI;
 
         const fontSize = edge.font.size || 11;
         const fontFace = edge.font.face || 'Inter';
@@ -625,59 +639,39 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const width = metrics.width + padX * 2;
         const height = fontSize + padY * 2;
 
+        let borderColor = 'rgba(255, 255, 255, 0.4)';
+        const dl = sourceLinks.find(src => (src.id || `${src.from}-${src.to}-${src.type}`) === edge.id);
+        if (dl) {
+          if (dl.type === 'override') borderColor = '#00e5ff';
+          else if (dl.type === 'conflict') borderColor = '#ff003c';
+          else if (dl.type === 'awareness') borderColor = 'rgba(255, 255, 255, 0.7)';
+        }
+
         boxes.push({
           label: edge.label,
           x,
           y,
+          angle,
           width,
           height,
           fontSize,
-          fontFace
+          fontFace,
+          borderColor
         });
       });
     }
 
-    const iterations = 8;
-    const paddingMargin = 6;
-
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let i = 0; i < boxes.length; i++) {
-        for (let j = i + 1; j < boxes.length; j++) {
-          const b1 = boxes[i];
-          const b2 = boxes[j];
-
-          const dx = b2.x - b1.x;
-          const dy = b2.y - b1.y;
-
-          const minDx = (b1.width + b2.width) / 2 + paddingMargin;
-          const minDy = (b1.height + b2.height) / 2 + paddingMargin;
-
-          const overlapX = minDx - Math.abs(dx);
-          const overlapY = minDy - Math.abs(dy);
-
-          if (overlapX > 0 && overlapY > 0) {
-            if (overlapX < overlapY) {
-              const pushX = (overlapX / 2) * (dx >= 0 ? 1 : -1);
-              b1.x -= pushX;
-              b2.x += pushX;
-            } else {
-              const pushY = (overlapY / 2) * (dy >= 0 ? 1 : -1);
-              b1.y -= pushY;
-              b2.y += pushY;
-            }
-          }
-        }
-      }
-    }
-
     boxes.forEach(box => {
       ctx.save();
+      ctx.translate(box.x, box.y);
+      ctx.rotate(box.angle);
+
       ctx.font = `${box.fontSize}px ${box.fontFace}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const rx = box.x - box.width / 2;
-      const ry = box.y - box.height / 2;
+      const rx = -box.width / 2;
+      const ry = -box.height / 2;
       const r = 6;
 
       ctx.beginPath();
@@ -689,15 +683,15 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       ctx.fillStyle = 'rgba(15, 18, 24, 0.96)';
       ctx.fill();
 
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = box.borderColor;
       ctx.stroke();
 
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#0f1218';
-      ctx.strokeText(box.label, box.x, box.y);
+      ctx.strokeText(box.label, 0, 0);
       ctx.fillStyle = '#f8fafc';
-      ctx.fillText(box.label, box.x, box.y);
+      ctx.fillText(box.label, 0, 0);
 
       ctx.restore();
     });
