@@ -231,12 +231,12 @@ div.vis-tooltip {
 
 /* LEGENDA - STAŁY SYSTEM DOLNY */
 #system-log {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 440px;
-  max-width: calc(100vw - 2rem);
+  max-width: calc(100vw - 1rem);
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-bottom: none;
@@ -245,12 +245,13 @@ div.vis-tooltip {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 15;
+  z-index: 30;
   box-shadow: 0 -5px 25px rgba(0,0,0,0.35);
+  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 #system-log.collapsed {
-  transform: translate(-50%, calc(100% - 46px));
+  transform: translate(-50%, calc(100% - 48px));
 }
 
 .arrow-badge {
@@ -328,7 +329,9 @@ div.vis-tooltip {
 }
 
 .log-header {
-  padding: 1rem 1.25rem;
+  height: 48px;
+  box-sizing: border-box;
+  padding: 0 1.25rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
