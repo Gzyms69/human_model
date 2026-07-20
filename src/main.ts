@@ -33,7 +33,14 @@ function mapNode(dn: DomainNode): Node {
     label: dn.title,
     shape: 'dot',
     size: 25,
-    font: { color: '#ffffff', size: 14, face: 'Inter' },
+    font: {
+      color: '#ffffff',
+      size: 14,
+      face: 'Inter',
+      strokeWidth: 4,
+      strokeColor: '#0f1218',
+      background: 'rgba(15, 18, 24, 0.75)'
+    },
     color: {
       border: c.border,
       background: c.background,
@@ -223,7 +230,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     nodesDataSet.update(nodesDataSet.get().filter(n => n.id === nodeId || connectedNodes.includes(n.id as string)).map(n => {
         const dn = sourceNodes.find(src => src.id === n.id);
         const mapped = mapNode(dn!);
-        return { id: n.id, color: mapped.color, font: { color: '#ffffff' } };
+        return { id: n.id, color: mapped.color, font: mapped.font };
     }));
 
     edgesDataSet.update(connectedEdges.map(edgeId => {
@@ -299,7 +306,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     nodesDataSet.update(nodesDataSet.get().filter(n => n.id === fromId || n.id === toId).map(n => {
       const dn = sourceNodes.find(src => src.id === n.id);
       const mapped = mapNode(dn!);
-      return { id: n.id, color: mapped.color, font: { color: '#ffffff' } };
+      return { id: n.id, color: mapped.color, font: mapped.font };
     }));
 
     const dl = sourceLinks.find(src => (src.id || `${src.from}-${src.to}-${src.type}`) === edgeId);
@@ -558,6 +565,65 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         ctx.fillText("MATRYCA JĘZYKOWA (MEMBRANA)", centerX - 120, centerY - radius - 10);
       }
     }
+  });
+
+  network.on("afterDrawing", (ctx: any) => {
+    if (!network) return;
+    const positions = network.getPositions();
+    const edges = edgesDataSet.get();
+
+    edges.forEach((edge: any) => {
+      if (!edge.font || typeof edge.font !== 'object' || !edge.font.size || edge.font.size <= 0 || !edge.label) {
+        return;
+      }
+
+      const fromPos = positions[edge.from];
+      const toPos = positions[edge.to];
+      if (!fromPos || !toPos) return;
+
+      const midX = (fromPos.x + toPos.x) / 2;
+      const midY = (fromPos.y + toPos.y) / 2;
+
+      const fontSize = edge.font.size || 11;
+      const fontFace = edge.font.face || 'Inter';
+
+      ctx.save();
+      ctx.font = `${fontSize}px ${fontFace}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const metrics = ctx.measureText(edge.label);
+      const textWidth = metrics.width;
+      const textHeight = fontSize;
+      const padX = 8;
+      const padY = 5;
+      const rw = textWidth + padX * 2;
+      const rh = textHeight + padY * 2;
+      const rx = midX - rw / 2;
+      const ry = midY - rh / 2;
+      const r = 5;
+
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(rx, ry, rw, rh, r);
+      } else {
+        ctx.rect(rx, ry, rw, rh);
+      }
+      ctx.fillStyle = edge.font.background || 'rgba(15, 18, 24, 0.96)';
+      ctx.fill();
+
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = edge.font.strokeColor || 'rgba(255, 255, 255, 0.25)';
+      ctx.stroke();
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#0f1218';
+      ctx.strokeText(edge.label, midX, midY);
+      ctx.fillStyle = edge.font.color && edge.font.color !== 'rgba(0,0,0,0)' ? edge.font.color : '#f8fafc';
+      ctx.fillText(edge.label, midX, midY);
+
+      ctx.restore();
+    });
   });
 
   if (mode === 'MAKRO' && !isMobile) {
