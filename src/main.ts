@@ -589,6 +589,9 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       fontSize: number;
       fontFace: string;
       borderColor: string;
+      borderDashes: number[];
+      textColor: string;
+      glowColor?: string;
     }
 
     const boxes: LabelBox[] = [];
@@ -611,20 +614,37 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const nx = -ty;
         const ny = tx;
 
-        let normalOffset = 20;
+        let normalOffset = 22;
         if (count > 1) {
-          normalOffset = (index === 0 ? -1 : 1) * 24;
+          normalOffset = (index === 0 ? -1 : 1) * 26;
         }
 
-        const midX = fromPos.x + dx * 0.5;
-        const midY = fromPos.y + dy * 0.5;
+        let midX = fromPos.x + dx * 0.5;
+        let midY = fromPos.y + dy * 0.5;
 
-        const x = midX + nx * normalOffset;
-        const y = midY + ny * normalOffset;
+        let x = midX + nx * normalOffset;
+        let y = midY + ny * normalOffset;
 
+        // Node Exclusion Zone: Keep labels at least 50px away from node centers
+        const minNodeDist = 50;
+        const dFrom = Math.sqrt((x - fromPos.x) ** 2 + (y - fromPos.y) ** 2);
+        if (dFrom < minNodeDist && dFrom > 0) {
+          x = fromPos.x + ((x - fromPos.x) / dFrom) * minNodeDist;
+          y = fromPos.y + ((y - fromPos.y) / dFrom) * minNodeDist;
+        }
+        const dTo = Math.sqrt((x - toPos.x) ** 2 + (y - toPos.y) ** 2);
+        if (dTo < minNodeDist && dTo > 0) {
+          x = toPos.x + ((x - toPos.x) / dTo) * minNodeDist;
+          y = toPos.y + ((y - toPos.y) / dTo) * minNodeDist;
+        }
+
+        // Controlled tilt angle: clamp max rotation to +/- 25 degrees (+/- 0.436 rad) for optimal readability
         let angle = Math.atan2(dy, dx);
         if (angle > Math.PI / 2) angle -= Math.PI;
         if (angle < -Math.PI / 2) angle += Math.PI;
+
+        const maxTilt = 0.436; // 25 degrees
+        angle = Math.max(-maxTilt, Math.min(maxTilt, angle));
 
         const fontSize = edge.font.size || 11;
         const fontFace = edge.font.face || 'Inter';
@@ -634,17 +654,35 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const metrics = ctx.measureText(edge.label);
         ctx.restore();
 
-        const padX = 9;
+        const padX = 10;
         const padY = 5;
         const width = metrics.width + padX * 2;
         const height = fontSize + padY * 2;
 
-        let borderColor = 'rgba(255, 255, 255, 0.4)';
+        let borderColor = 'rgba(255, 255, 255, 0.35)';
+        let borderDashes: number[] = [];
+        let textColor = '#f8fafc';
+        let glowColor: string | undefined = undefined;
+
         const dl = sourceLinks.find(src => (src.id || `${src.from}-${src.to}-${src.type}`) === edge.id);
         if (dl) {
-          if (dl.type === 'override') borderColor = '#00e5ff';
-          else if (dl.type === 'conflict') borderColor = '#ff003c';
-          else if (dl.type === 'awareness') borderColor = 'rgba(255, 255, 255, 0.7)';
+          if (dl.type === 'override') {
+            borderColor = '#00e5ff';
+            textColor = '#80f2ff';
+            glowColor = 'rgba(0, 229, 255, 0.5)';
+          } else if (dl.type === 'conflict') {
+            borderColor = '#ff003c';
+            borderDashes = [4, 3];
+            textColor = '#ff6685';
+            glowColor = 'rgba(255, 0, 60, 0.5)';
+          } else if (dl.type === 'awareness') {
+            borderColor = 'rgba(255, 255, 255, 0.7)';
+            borderDashes = [4, 3];
+            textColor = '#ffffff';
+          } else if (dl.type === 'flow') {
+            borderColor = 'rgba(255, 255, 255, 0.35)';
+            textColor = '#f8fafc';
+          }
         }
 
         boxes.push({
@@ -656,9 +694,46 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
           height,
           fontSize,
           fontFace,
-          borderColor
+          borderColor,
+          borderDashes,
+          textColor,
+          glowColor
         });
       });
+    }
+
+    // Iterative 2D AABB Relaxation Pass for non-overlapping pill badges
+    const iterations = 15;
+    const paddingMargin = 8;
+
+    for (let iter = 0; iter < iterations; iter++) {
+      for (let i = 0; i < boxes.length; i++) {
+        for (let j = i + 1; j < boxes.length; j++) {
+          const b1 = boxes[i];
+          const b2 = boxes[j];
+
+          const dx = b2.x - b1.x;
+          const dy = b2.y - b1.y;
+
+          const minDx = (b1.width + b2.width) / 2 + paddingMargin;
+          const minDy = (b1.height + b2.height) / 2 + paddingMargin;
+
+          const overlapX = minDx - Math.abs(dx);
+          const overlapY = minDy - Math.abs(dy);
+
+          if (overlapX > 0 && overlapY > 0) {
+            if (overlapX < overlapY) {
+              const pushX = (overlapX / 2) * (dx >= 0 ? 1 : -1);
+              b1.x -= pushX;
+              b2.x += pushX;
+            } else {
+              const pushY = (overlapY / 2) * (dy >= 0 ? 1 : -1);
+              b1.y -= pushY;
+              b2.y += pushY;
+            }
+          }
+        }
+      }
     }
 
     boxes.forEach(box => {
@@ -685,12 +760,23 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = box.borderColor;
+      if (box.borderDashes.length > 0) {
+        ctx.setLineDash(box.borderDashes);
+      } else {
+        ctx.setLineDash([]);
+      }
       ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (box.glowColor) {
+        ctx.shadowColor = box.glowColor;
+        ctx.shadowBlur = 8;
+      }
 
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#0f1218';
       ctx.strokeText(box.label, 0, 0);
-      ctx.fillStyle = '#f8fafc';
+      ctx.fillStyle = box.textColor;
       ctx.fillText(box.label, 0, 0);
 
       ctx.restore();
