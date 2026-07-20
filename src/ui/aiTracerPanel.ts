@@ -104,10 +104,15 @@ export class AiTracerPanel {
             </div>
           </div>
 
+          <div id="observer-card" class="observer-result-card hidden">
+            <h3><i data-lucide="eye"></i> Rola Jaźni / Obserwator (m1)</h3>
+            <p id="result-observer-text"></p>
+          </div>
+
           <div class="ai-controls-card">
             <div class="controls-top-row">
               <span class="controls-title"><i data-lucide="play-circle"></i> Odtwarzacz Śladu</span>
-              <span id="step-counter-badge" class="step-badge">Krok 0 / 0</span>
+              <span id="step-counter-badge" class="step-badge">Krok 1 / 1</span>
             </div>
             <div class="playback-btn-group">
               <button id="btn-trace-prev" class="ctrl-btn" title="Poprzedni krok"><i data-lucide="skip-back"></i></button>
@@ -118,7 +123,7 @@ export class AiTracerPanel {
           </div>
 
           <div class="timeline-section">
-            <h3><i data-lucide="list-ordered"></i> Sekwencja Przyczynowo-Skutkowa</h3>
+            <h3><i data-lucide="list-ordered"></i> Ciągła Sekwencja Przepływu</h3>
             <div id="timeline-steps-list" class="timeline-steps-list"></div>
           </div>
 
@@ -202,8 +207,8 @@ export class AiTracerPanel {
 
       const counterBadge = this.container.querySelector('#step-counter-badge');
       if (counterBadge) {
-        const currentDisplay = index >= 0 ? index + 1 : 0;
-        counterBadge.textContent = `Krok ${currentDisplay} / ${total}`;
+        const displayStep = Math.min(index + 1, total);
+        counterBadge.textContent = `Krok ${displayStep} / ${total}`;
       }
     };
   }
@@ -228,7 +233,7 @@ export class AiTracerPanel {
       const result = await analyzeSituation(story, keyInput?.value, modelSelect?.value);
       this.renderResults(result);
       
-      this.animationController.loadTrace(result.storyNodes);
+      this.animationController.loadTrace(result.storyNodes, result.matchedLinks);
       this.animationController.play();
     } catch (err: any) {
       this.showError(err.message || 'Wystąpił nieoczekiwany błąd podczas analizy.');
@@ -252,22 +257,33 @@ export class AiTracerPanel {
       modelBadge.textContent = result.usedModel ? `AI: ${result.usedModel}` : '';
     }
 
+    // Observer m1 Card
+    const observerCard = this.container.querySelector('#observer-card');
+    const observerText = this.container.querySelector('#result-observer-text');
+    if (result.observerRoleSummary && observerCard && observerText) {
+      observerText.textContent = result.observerRoleSummary;
+      observerCard.classList.remove('hidden');
+    }
+
     const timelineContainer = this.container.querySelector('#timeline-steps-list');
     if (timelineContainer) {
       timelineContainer.innerHTML = '';
       
       result.steps.forEach((step, idx) => {
+        // Step Card
         const stepEl = document.createElement('div');
-        stepEl.className = 'timeline-step-card';
+        const isObserver = step.nodeId === 'm1';
+        stepEl.className = `timeline-step-card ${isObserver ? 'observer-step' : ''}`;
         stepEl.dataset.stepIndex = idx.toString();
         stepEl.dataset.nodeId = step.nodeId;
 
         stepEl.innerHTML = `
-          <div class="step-num">${idx + 1}</div>
+          <div class="step-num ${isObserver ? 'observer-num' : ''}">${idx + 1}</div>
           <div class="step-content">
             <div class="step-header">
-              <span class="step-node-badge">${step.nodeId}</span>
+              <span class="step-node-badge ${isObserver ? 'observer-node-badge' : ''}">${step.nodeId}</span>
               <strong class="step-title">${step.title}</strong>
+              ${isObserver ? '<span class="observer-tag">KLUCZOWY OBSERWATOR</span>' : ''}
             </div>
             <p class="step-trigger">⚡ <strong>Wyzwalacz:</strong> ${step.trigger}</p>
             <p class="step-desc">🧠 <strong>Co się stało:</strong> ${step.whatHappened}</p>
@@ -280,6 +296,27 @@ export class AiTracerPanel {
         });
 
         timelineContainer.appendChild(stepEl);
+
+        // Edge Transition Card if not last step
+        if (idx < result.steps.length - 1) {
+          const nextStep = result.steps[idx + 1];
+          const edgeExp = (result.edgeExplanations || []).find(
+            (e) =>
+              (e.fromNodeId === step.nodeId && e.toNodeId === nextStep.nodeId) ||
+              (e.fromNodeId === nextStep.nodeId && e.toNodeId === step.nodeId)
+          );
+
+          const transitionCard = document.createElement('div');
+          transitionCard.className = 'edge-transition-card';
+          transitionCard.innerHTML = `
+            <div class="edge-line-visual"></div>
+            <div class="edge-text-content">
+              <span class="edge-flow-arrow">➔ PRZEPŁYW IMPETU:</span>
+              <p>${edgeExp?.transitionText || `Oddziaływanie sygnału z ${step.title} na ${nextStep.title}.`}</p>
+            </div>
+          `;
+          timelineContainer.appendChild(transitionCard);
+        }
       });
     }
 

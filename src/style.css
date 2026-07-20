@@ -1153,4 +1153,108 @@ div.vis-tooltip {
   font-family: monospace;
 }
 
+/* OBSERVER M1 CARD STYLES */
+.observer-result-card {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(192, 132, 252, 0.08) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.15);
+}
+
+.observer-result-card.hidden {
+  display: none;
+}
+
+.observer-result-card h3 {
+  color: #c084fc;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.observer-result-card p {
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: #f3e8ff;
+  margin: 0;
+}
+
+.observer-step {
+  border-color: rgba(168, 85, 247, 0.4) !important;
+  background: rgba(168, 85, 247, 0.08) !important;
+}
+
+.observer-step.active {
+  border-color: #a855f7 !important;
+  background: rgba(168, 85, 247, 0.25) !important;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35) !important;
+}
+
+.observer-num {
+  background: #a855f7 !important;
+  color: #fff !important;
+}
+
+.observer-node-badge {
+  color: #c084fc !important;
+  background: rgba(168, 85, 247, 0.2) !important;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.observer-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #f3e8ff;
+  background: rgba(168, 85, 247, 0.3);
+  border: 1px solid #a855f7;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+  margin-left: auto;
+}
+
+/* EDGE TRANSITION CARD STYLES */
+.edge-transition-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: -0.15rem 0 -0.15rem 1.25rem;
+  padding: 0.45rem 0.75rem;
+  background: rgba(0, 229, 255, 0.04);
+  border-left: 2px dashed rgba(0, 229, 255, 0.5);
+  border-radius: 0 8px 8px 0;
+}
+
+.edge-line-visual {
+  width: 2px;
+  height: 100%;
+}
+
+.edge-text-content {
+  flex: 1;
+}
+
+.edge-flow-arrow {
+  display: block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #00e5ff;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.15rem;
+}
+
+.edge-text-content p {
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #94a3b8;
+  margin: 0;
+  font-style: italic;
+}
+
+
 

@@ -10,6 +10,7 @@ export class TracerAnimationController {
   private sourceLinks: DomainLink[];
 
   private storyNodes: string[] = [];
+  private matchedLinks: DomainLink[] = [];
   private currentIndex: number = -1;
   private isPlaying: boolean = false;
   private stepDurationMs: number = 1800;
@@ -46,9 +47,10 @@ export class TracerAnimationController {
     this.sourceLinks = sourceLinks;
   }
 
-  public loadTrace(storyNodes: string[]) {
+  public loadTrace(storyNodes: string[], matchedLinks: DomainLink[] = []) {
     this.stopTimer();
     this.storyNodes = storyNodes;
+    this.matchedLinks = matchedLinks;
     this.currentIndex = -1;
     this.isPlaying = false;
     this.dimGraph();
@@ -109,6 +111,7 @@ export class TracerAnimationController {
     this.currentIndex++;
     if (this.currentIndex >= this.storyNodes.length) {
       this.isPlaying = false;
+      this.currentIndex = this.storyNodes.length - 1; // Clamp to last index
       this.notifyState();
       return;
     }
@@ -134,7 +137,15 @@ export class TracerAnimationController {
 
     this.nodesDataSet.update(
       this.nodesDataSet.get().map((n) => {
-        if (n.id && storyNodeSet.has(n.id as string)) {
+        const idStr = n.id as string;
+        if (idStr === 'm1' && storyNodeSet.has('m1')) {
+          // Special Observer dimming highlight
+          return {
+            id: n.id,
+            color: { background: 'rgba(168, 85, 247, 0.25)', border: '#c084fc' },
+            font: { color: '#e9d5ff', size: 14 }
+          };
+        } else if (idStr && storyNodeSet.has(idStr)) {
           return {
             id: n.id,
             color: { background: 'rgba(30, 40, 55, 0.6)', border: 'rgba(0, 229, 255, 0.4)' },
@@ -171,7 +182,21 @@ export class TracerAnimationController {
         const idStr = n.id as string;
 
         if (idStr === activeNodeId) {
-          // Current active node - glowing pulse
+          if (idStr === 'm1') {
+            // Active Observer (m1) Node - Glowing Violet Pulse
+            return {
+              id: n.id,
+              color: {
+                background: '#a855f7',
+                border: '#ffffff',
+                highlight: { background: '#c084fc', border: '#ffffff' }
+              },
+              font: { color: '#ffffff', size: 17 },
+              shadow: { enabled: true, color: '#a855f7', size: 35, x: 0, y: 0 }
+            };
+          }
+
+          // Active Standard Node - Glowing Cyan Pulse
           return {
             id: n.id,
             color: {
@@ -183,7 +208,15 @@ export class TracerAnimationController {
             shadow: { enabled: true, color: '#00e5ff', size: 30, x: 0, y: 0 }
           };
         } else if (visitedNodes.has(idStr)) {
-          // Visited node in current trace
+          if (idStr === 'm1') {
+            return {
+              id: n.id,
+              color: { background: 'rgba(168, 85, 247, 0.5)', border: '#c084fc' },
+              font: { color: '#f3e8ff', size: 14 },
+              shadow: { enabled: true, color: '#a855f7', size: 20, x: 0, y: 0 }
+            };
+          }
+
           return {
             id: n.id,
             color: {
@@ -194,7 +227,6 @@ export class TracerAnimationController {
             shadow: { enabled: true, color: '#00e5ff', size: 15, x: 0, y: 0 }
           };
         } else if (this.storyNodes.includes(idStr)) {
-          // Future node in trace
           return {
             id: n.id,
             color: { background: 'rgba(255, 255, 255, 0.08)', border: 'rgba(0, 229, 255, 0.3)' },
@@ -202,7 +234,6 @@ export class TracerAnimationController {
             shadow: false
           };
         } else {
-          // Non-trace node
           return {
             id: n.id,
             color: { background: 'rgba(15, 18, 24, 0.15)', border: 'rgba(40, 45, 55, 0.2)' },
@@ -213,26 +244,32 @@ export class TracerAnimationController {
       })
     );
 
-    // Update edges between trace nodes up to current step
-    const activeTraceEdges = new Set<string>();
+    // Collect all active trace edges connecting visited nodes in sequence
+    const activeTraceEdgeIds = new Set<string>();
     for (let i = 0; i < this.currentIndex; i++) {
-      const from = this.storyNodes[i];
-      const to = this.storyNodes[i + 1];
-      const edge = this.sourceLinks.find((l) => (l.from === from && l.to === to) || (l.from === to && l.to === from));
+      const u = this.storyNodes[i];
+      const v = this.storyNodes[i + 1];
+
+      // Check in matchedLinks or sourceLinks
+      const edge =
+        this.matchedLinks.find((l) => (l.from === u && l.to === v) || (l.from === v && l.to === u)) ||
+        this.sourceLinks.find((l) => (l.from === u && l.to === v) || (l.from === v && l.to === u));
+
       if (edge) {
-        activeTraceEdges.add(edge.id || `${edge.from}-${edge.to}-${edge.type}`);
+        activeTraceEdgeIds.add(edge.id || `${edge.from}-${edge.to}-${edge.type}`);
       }
     }
 
     this.edgesDataSet.update(
       this.edgesDataSet.get().map((e) => {
         const idStr = e.id as string;
-        if (activeTraceEdges.has(idStr)) {
+        if (activeTraceEdgeIds.has(idStr)) {
           return {
             id: e.id,
-            color: { color: '#00e5ff' },
-            width: 3.5,
-            shadow: { enabled: true, color: '#00e5ff', size: 12, x: 0, y: 0 }
+            color: { color: '#00e5ff', highlight: '#00ffaa' },
+            width: 4.5,
+            arrows: { to: { enabled: true, scaleFactor: 1.0 } },
+            shadow: { enabled: true, color: '#00e5ff', size: 15, x: 0, y: 0 }
           };
         } else {
           return {
@@ -288,7 +325,8 @@ export class TracerAnimationController {
 
   private notifyState() {
     if (this.onStateChange) {
-      this.onStateChange(this.isPlaying, this.currentIndex, this.storyNodes.length);
+      const clampedCurrent = Math.max(0, Math.min(this.currentIndex, this.storyNodes.length - 1));
+      this.onStateChange(this.isPlaying, clampedCurrent, this.storyNodes.length);
     }
   }
 }

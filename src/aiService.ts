@@ -1,4 +1,5 @@
 import { MIKRO_NODES, MIKRO_LINKS, type DomainNode, type DomainLink } from './data';
+import { expandPathToValidGraphEdges } from './graphPathfinder';
 
 export interface TraceStep {
   step: number;
@@ -7,13 +8,22 @@ export interface TraceStep {
   trigger: string;
   whatHappened: string;
   whyItHappened: string;
+  isSelfObserver?: boolean;
+}
+
+export interface EdgeExplanation {
+  fromNodeId: string;
+  toNodeId: string;
+  transitionText: string;
 }
 
 export interface SituationAnalysisResult {
   summary: string;
   storyNodes: string[];
-  storyEdges: Array<{ from: string; to: string; label?: string }>;
+  matchedLinks: DomainLink[];
+  edgeExplanations: EdgeExplanation[];
   steps: TraceStep[];
+  observerRoleSummary: string;
   rootCause: string;
   operationalLifehack: string;
   usedModel?: string;
@@ -36,8 +46,7 @@ function formatNodesContext(nodes: DomainNode[]): string {
     .map(
       (n) =>
         `- ID: "${n.id}" | Nazwa: "${n.title}" | Grupa: ${n.group || 'brak'}
-  Opis: ${n.description}
-  Wskazówka: ${n.lifehack}`
+  Opis: ${n.description}`
     )
     .join('\n');
 }
@@ -65,7 +74,6 @@ export async function analyzeSituation(
 
   const trimmedKey = apiKey.trim();
 
-  // If user provided a direct Google AI Studio API Key (starts with AIzaSy)
   if (trimmedKey.startsWith('AIzaSy')) {
     return analyzeWithGoogleDirect(userStory, trimmedKey);
   }
@@ -73,48 +81,58 @@ export async function analyzeSituation(
   const nodesContext = formatNodesContext(MIKRO_NODES);
   const linksContext = formatLinksContext(MIKRO_LINKS);
 
-  const systemPrompt = `Jesteś światowej klasy analitykiem behawioralnym, neurobiologiem i psychologiem.
-Twoim zadaniem jest przeanalizowanie realnej sytuacji z życia podanej przez użytkownika i dokładne odwzorowanie jej mechaniki przyczynowo-skutkowej na dostarczonym grafie systemowym ("Human Model").
+  const systemPrompt = `Jesteś światowej klasy analitykiem behawioralnym i twórcą systemu "Human Model".
+Twoim zadaniem jest dokładna dekompozycja sytuacji z życia użytkownika na ciągły, nieprzerwany przepływ przyczynowo-skutkowy po grafie.
 
-Dostępne Węzły Systemowe (Używaj WYŁĄCZNIE tych ID węzłów):
+Dostępne Węzły Systemowe:
 ${nodesContext}
 
-Dostępne Połączenia w Grafie:
+Istniejące Połączenia w Grafie (Używaj relacji między tymi węzłami):
 ${linksContext}
 
-ZASADY ANALIZY SYSTEMOWEJ (6 OSI ANALIZY):
-1. **Biochemia i Fizjologia**: Identyfikuj stany metaboliczne (zmęczenie, spadek glukozy, przebodźcowanie, m11, m7).
-2. **Otoczenie i Bodziec**: Co wywołało reakcję w środowisku (m9, rezonans, presja).
-3. **Emocja i Ciało**: Fizyczna reakcja migdałkowata (m4, m7).
-4. **Rama Poznawcza**: Automatyczne myśli i filtry przekonań (m3, m8).
-5. **Impuls vs Funkcja Wykonawcza**: Zderzenie dopaminowej zachcianki z samokontrolą kory czołowej (m5, m2).
-6. **Behawior i Pętla Zwrotna**: Wynikowe działanie (m6) i jego reakcja zwrotna.
+KRYTYCZNE ZASADY ANALIZY SYSTEMOWEJ:
+1. **Dostępność i Przepływ**: Sytuacja to ciągła reakcja łańcuchowa.
+2. **BEZWZGLĘDNY OBOWIĄZEK JAŹNI / OBSERWATORA (m1)**: W KAŻDEJ analizie MUSISZ uwzględnić węzeł 'm1' (Jaźń / Obserwator). Wyjaśnij czy Jaźń/Obserwator zadziałała (pauza, zauważenie emocji), czy też została zablokowana i zepchnięta przez automat biochemiczny (m11) i impuls (m5).
+3. **Opis Przejść Między Węzłami (edgeExplanations)**: Opisz dokładnie jak stan jednego węzła przechodzi w stan drugiego węzła.
 
-Wymogi odnośnie odpowiedzi:
-Zwróć TYLKO czysty obiekt JSON (bez znaczników markdown \`\`\`json, wyłącznie surowy JSON):
+Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 {
-  "summary": "Krótkie 2-3 zdaniowe podsumowanie mechaniki tej sytuacji (co tak naprawdę się stało).",
-  "storyNodes": ["m11", "m9", "m4", "m3", "m5", "m6"],
-  "storyEdges": [
-    { "from": "m11", "to": "m4", "label": "obniżony próg bodźca" },
-    { "from": "m4", "to": "m3", "label": "wyzwolenie myśli" }
+  "summary": "Krótkie 2-3 zdaniowe podsumowanie mechaniki całej sytuacji.",
+  "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
+  "edgeExplanations": [
+    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Wyczerpanie metaboliczne wywołało spadek napięcia i odczuwalne spięcie w klatce piersiowej." },
+    { "fromNodeId": "m7", "toNodeId": "m4", "transitionText": "Sygnał somatyczny został zinterpretowany przez układ limbiczny jako bezpośredni afekt frustracji." },
+    { "fromNodeId": "m4", "toNodeId": "m3", "transitionText": "Silne uczucie wyzwoliło katastroficzną myśl o bezsensie relacji." },
+    { "fromNodeId": "m3", "toNodeId": "m1", "transitionText": "Obserwator (m1) został osłabiony i nie zdołał dokonać defuzji poznawczej." },
+    { "fromNodeId": "m1", "toNodeId": "m5", "transitionText": "Brak uważności Jaźni pozwolił impulsowi ucieczkowemu na zdominowanie systemu." },
+    { "fromNodeId": "m5", "toNodeId": "m2", "transitionText": "Impuls pokonał osłabioną kontrolę wykonawczą kory przedczołowej." },
+    { "fromNodeId": "m2", "toNodeId": "m6", "transitionText": "Przejście decyzji w natychmiastowe zachowanie werbalne (zerwanie)." }
   ],
   "steps": [
     {
       "step": 1,
       "nodeId": "m11",
       "title": "Biochemia / Stan Metaboliczny",
-      "trigger": "8 godzin pracy, spadek glukozy",
-      "whatHappened": "Wyczerpanie zasobów energetycznych kory przedczołowej.",
-      "whyItHappened": "Układ nerwowy działał na rezerwach energetycznych."
+      "trigger": "Cały tydzień pracy bez odpoczynku",
+      "whatHappened": "Brak glukozy i zmęczenie układu nerwowego.",
+      "whyItHappened": "Kora czołowa utraciła paliwo do samokontroli."
+    },
+    {
+      "step": 5,
+      "nodeId": "m1",
+      "title": "Jaźń / Obserwator",
+      "trigger": "Pojawienie się burzy emocjonalnej",
+      "whatHappened": "Jaźń zlała się z myślą (brak dystansu Ja-jako-kontekst).",
+      "whyItHappened": "Brak pauzy 5-sekundowej sprawił, że Obserwator pozostał uśpiony.",
+      "isSelfObserver": true
     }
   ],
-  "rootCause": "Główna przyczyna źródłowa zdarzenia (mechaniczna, nie moralna).",
-  "operationalLifehack": "Konkretna, bezpłatna wskazówka operacyjna / stoper do natychmiastowego zastosowania następnym razem."
+  "observerRoleSummary": "Kluczowy podsumowujący opis roli Jaźni (m1) w tej sytuacji.",
+  "rootCause": "Mechaniczna przyczyna źródłowa zdarzenia.",
+  "operationalLifehack": "Wskazówka operacyjna (Stoper) zapobiegająca powtórzeniu w przyszłości."
 }
 `;
 
-  // Automatic Fallback Loop for OpenRouter
   const candidateModels = [
     requestedModel,
     ...FALLBACK_MODELS.filter((m) => m !== requestedModel)
@@ -128,7 +146,7 @@ Zwróć TYLKO czysty obiekt JSON (bez znaczników markdown \`\`\`json, wyłączn
         model: targetModel,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Oto sytuacja życiowa do przeanalizowania: "${userStory}"` }
+          { role: 'user', content: `Oto sytuacja do dekompozycji: "${userStory}"` }
         ],
         temperature: 0.2,
         response_format: { type: 'json_object' }
@@ -153,37 +171,67 @@ Zwróć TYLKO czysty obiekt JSON (bez znaczników markdown \`\`\`json, wyłączn
           if (errJson.error?.message) parsedMsg = errJson.error.message;
         } catch {}
 
-        console.warn(`OpenRouter model ${targetModel} returned status ${response.status}: ${parsedMsg}. Trying fallback...`);
+        console.warn(`Model ${targetModel} error ${response.status}: ${parsedMsg}`);
         lastErrorMsg = `(${response.status}) ${parsedMsg}`;
-        continue; // Try next model candidate
+        continue;
       }
 
       const data = await response.json();
       const rawContent = data.choices?.[0]?.message?.content;
-      if (!rawContent) {
-        console.warn(`OpenRouter model ${targetModel} returned empty content. Trying fallback...`);
-        continue;
-      }
+      if (!rawContent) continue;
 
       const cleanedJsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
       const result: SituationAnalysisResult = JSON.parse(cleanedJsonStr);
       
+      // Filter valid node IDs
       const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
-      result.storyNodes = (result.storyNodes || []).filter((id) => validNodeIds.has(id));
-      
-      if (result.storyNodes.length === 0) {
-        result.storyNodes = ['m11', 'm9', 'm4', 'm3', 'm5', 'm6'];
-      }
+      const rawNodes = (result.storyNodes || []).filter((id) => validNodeIds.has(id));
 
+      // EXPAND PATH TO VALID DIRECT GRAPH EDGES USING PATHFINDER (BFS)
+      const pathExp = expandPathToValidGraphEdges(rawNodes);
+      result.storyNodes = pathExp.expandedNodes;
+      result.matchedLinks = pathExp.matchedLinks;
       result.usedModel = targetModel;
+
+      // Ensure steps list covers expanded nodes
+      result.steps = patchStepsToCoverExpandedNodes(result.steps || [], result.storyNodes);
+
       return result;
     } catch (err: any) {
-      console.warn(`Failed model ${targetModel}:`, err);
-      lastErrorMsg = err.message || 'Błąd połączenia';
+      console.warn(`Error on model ${targetModel}:`, err);
+      lastErrorMsg = err.message || 'Connection error';
     }
   }
 
-  throw new Error(`Wszystkie próby połączenia z modelami AI nie powiodły się. Ostatni błąd: ${lastErrorMsg}`);
+  throw new Error(`Wszystkie próby połączenia nie powiodły się. Ostatni błąd: ${lastErrorMsg}`);
+}
+
+function patchStepsToCoverExpandedNodes(rawSteps: TraceStep[], expandedNodes: string[]): TraceStep[] {
+  const stepsMap = new Map<string, TraceStep>();
+  rawSteps.forEach((s) => stepsMap.set(s.nodeId, s));
+
+  return expandedNodes.map((nodeId, idx) => {
+    const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
+    const existing = stepsMap.get(nodeId);
+
+    if (existing) {
+      return {
+        ...existing,
+        step: idx + 1,
+        isSelfObserver: nodeId === 'm1'
+      };
+    }
+
+    return {
+      step: idx + 1,
+      nodeId: nodeId,
+      title: nodeDef?.title || nodeId,
+      trigger: 'Ogniwo pośrednie przepływu systemowego',
+      whatHappened: nodeDef?.description || 'Przeniesienie sygnału w układowym ciągu przyczynowym.',
+      whyItHappened: nodeDef?.lifehack || 'Przekazanie impetu reakcji.',
+      isSelfObserver: nodeId === 'm1'
+    };
+  });
 }
 
 async function analyzeWithGoogleDirect(userStory: string, apiKey: string): Promise<SituationAnalysisResult> {
@@ -199,8 +247,10 @@ ${linksContext}
 Zwróć TYLKO wygenerowany JSON:
 {
   "summary": "Podsumowanie",
-  "storyNodes": ["m11", "m9", "m4", "m3", "m5", "m6"],
-  "storyEdges": [],
+  "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
+  "edgeExplanations": [
+    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przejścia" }
+  ],
   "steps": [
     {
       "step": 1,
@@ -208,9 +258,11 @@ Zwróć TYLKO wygenerowany JSON:
       "title": "Biochemia",
       "trigger": "Wyzwalacz",
       "whatHappened": "Co się stało",
-      "whyItHappened": "Dlaczego"
+      "whyItHappened": "Dlaczego",
+      "isSelfObserver": false
     }
   ],
+  "observerRoleSummary": "Opis roli Jaźni",
   "rootCause": "Przyczyna źródłowa",
   "operationalLifehack": "Wskazówka"
 }
@@ -239,6 +291,15 @@ Sytuacja: "${userStory}"`;
 
   const cleanedJsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
   const result: SituationAnalysisResult = JSON.parse(cleanedJsonStr);
+
+  const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
+  const rawNodes = (result.storyNodes || []).filter((id) => validNodeIds.has(id));
+
+  const pathExp = expandPathToValidGraphEdges(rawNodes);
+  result.storyNodes = pathExp.expandedNodes;
+  result.matchedLinks = pathExp.matchedLinks;
+  result.steps = patchStepsToCoverExpandedNodes(result.steps || [], result.storyNodes);
   result.usedModel = 'Google AI Studio (Gemini 1.5 Flash)';
+
   return result;
 }
