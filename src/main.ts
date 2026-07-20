@@ -583,7 +583,6 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       label: string;
       x: number;
       y: number;
-      angle: number;
       width: number;
       height: number;
       fontSize: number;
@@ -598,9 +597,9 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 
     for (const key in pairGroups) {
       const group = pairGroups[key];
-      const count = group.length;
+      const groupCount = group.length;
 
-      group.forEach((edge: any, index: number) => {
+      group.forEach((edge: any, groupIdx: number) => {
         const fromPos = positions[edge.from];
         const toPos = positions[edge.to];
         if (!fromPos || !toPos) return;
@@ -609,24 +608,30 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const dy = toPos.y - fromPos.y;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
-        const tx = dx / len;
-        const ty = dy / len;
-        const nx = -ty;
-        const ny = tx;
-
-        let normalOffset = 22;
-        if (count > 1) {
-          normalOffset = (index === 0 ? -1 : 1) * 26;
+        // Fractional positioning along edge vector: 0.35 or 0.65 for parallel edges
+        let fraction = 0.5;
+        if (groupCount > 1) {
+          fraction = groupIdx === 0 ? 0.35 : 0.65;
+          if (edge.from > edge.to) {
+            fraction = 1 - fraction;
+          }
         }
 
-        let midX = fromPos.x + dx * 0.5;
-        let midY = fromPos.y + dy * 0.5;
+        // CurvedCW offset (roundness 0.08 for tight curve hugging)
+        const roundness = 0.08;
+        const curveOffsetX = roundness * dy;
+        const curveOffsetY = -roundness * dx;
 
-        let x = midX + nx * normalOffset;
-        let y = midY + ny * normalOffset;
+        // Normal unit vector for tight line hugging
+        const outerNx = dy / len;
+        const outerNy = -dx / len;
+        const tightNormalOffset = 8;
 
-        // Node Exclusion Zone: Keep labels at least 50px away from node centers
-        const minNodeDist = 50;
+        let x = fromPos.x + dx * fraction + curveOffsetX + outerNx * tightNormalOffset;
+        let y = fromPos.y + dy * fraction + curveOffsetY + outerNy * tightNormalOffset;
+
+        // Node Exclusion Zone: Keep labels at least 48px away from node centers
+        const minNodeDist = 48;
         const dFrom = Math.sqrt((x - fromPos.x) ** 2 + (y - fromPos.y) ** 2);
         if (dFrom < minNodeDist && dFrom > 0) {
           x = fromPos.x + ((x - fromPos.x) / dFrom) * minNodeDist;
@@ -638,14 +643,6 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
           y = toPos.y + ((y - toPos.y) / dTo) * minNodeDist;
         }
 
-        // Controlled tilt angle: clamp max rotation to +/- 25 degrees (+/- 0.436 rad) for optimal readability
-        let angle = Math.atan2(dy, dx);
-        if (angle > Math.PI / 2) angle -= Math.PI;
-        if (angle < -Math.PI / 2) angle += Math.PI;
-
-        const maxTilt = 0.436; // 25 degrees
-        angle = Math.max(-maxTilt, Math.min(maxTilt, angle));
-
         const fontSize = edge.font.size || 11;
         const fontFace = edge.font.face || 'Inter';
 
@@ -654,7 +651,7 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const metrics = ctx.measureText(edge.label);
         ctx.restore();
 
-        const padX = 10;
+        const padX = 9;
         const padY = 5;
         const width = metrics.width + padX * 2;
         const height = fontSize + padY * 2;
@@ -689,7 +686,6 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
           label: edge.label,
           x,
           y,
-          angle,
           width,
           height,
           fontSize,
@@ -702,9 +698,9 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       });
     }
 
-    // Iterative 2D AABB Relaxation Pass for non-overlapping pill badges
-    const iterations = 15;
-    const paddingMargin = 8;
+    // 2D AABB Relaxation Pass for non-overlapping pill badges
+    const iterations = 12;
+    const paddingMargin = 6;
 
     for (let iter = 0; iter < iterations; iter++) {
       for (let i = 0; i < boxes.length; i++) {
@@ -738,15 +734,12 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 
     boxes.forEach(box => {
       ctx.save();
-      ctx.translate(box.x, box.y);
-      ctx.rotate(box.angle);
-
       ctx.font = `${box.fontSize}px ${box.fontFace}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const rx = -box.width / 2;
-      const ry = -box.height / 2;
+      const rx = box.x - box.width / 2;
+      const ry = box.y - box.height / 2;
       const r = 6;
 
       ctx.beginPath();
@@ -775,9 +768,9 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#0f1218';
-      ctx.strokeText(box.label, 0, 0);
+      ctx.strokeText(box.label, box.x, box.y);
       ctx.fillStyle = box.textColor;
-      ctx.fillText(box.label, 0, 0);
+      ctx.fillText(box.label, box.x, box.y);
 
       ctx.restore();
     });
