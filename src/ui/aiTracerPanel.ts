@@ -63,7 +63,10 @@ export class AiTracerPanel {
             <option value="google/gemini-2.5-flash" ${savedModel === 'google/gemini-2.5-flash' ? 'selected' : ''}>Google Gemini 2.5 Flash (Paid)</option>
           </select>
         </label>
-        <button id="btn-save-settings" class="btn-save-sm">Zapisz Ustawienia</button>
+        <div class="settings-actions">
+          <button id="btn-save-settings" class="btn-save-sm">Zapisz Ustawienia</button>
+          <button id="btn-clear-settings" class="btn-clear-sm" style="margin-left: 8px; background: transparent; border: 1px solid var(--border-color, #444); color: #ff6b6b; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Usuń Klucz</button>
+        </div>
       </div>
 
       <div class="ai-panel-body">
@@ -220,6 +223,14 @@ export class AiTracerPanel {
       if (keyInput) localStorage.setItem('human_model_openrouter_key', keyInput.value.trim());
       if (modelSelect) localStorage.setItem('human_model_openrouter_model', modelSelect.value.trim());
       
+      this.container.querySelector('#ai-settings-drawer')?.classList.add('hidden');
+      this.updateAuthState();
+    });
+
+    this.container.querySelector('#btn-clear-settings')?.addEventListener('click', () => {
+      localStorage.removeItem('human_model_openrouter_key');
+      const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
+      if (keyInput) keyInput.value = '';
       this.container.querySelector('#ai-settings-drawer')?.classList.add('hidden');
       this.updateAuthState();
     });

@@ -32,7 +32,7 @@ export interface SituationAnalysisResult {
   usedModel?: string;
 }
 
-const DEFAULT_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+const DEFAULT_API_KEY = '';
 const DEFAULT_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
 
 const FALLBACK_MODELS = [
@@ -100,7 +100,7 @@ Zwróć TYLKO czysty obiekt JSON:
         headers: {
           'Authorization': `Bearer ${trimmedKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://humanmodel.local',
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://humanmodel.app',
           'X-Title': 'Human Model AI Tracer'
         },
         body: JSON.stringify({
@@ -227,7 +227,7 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
         headers: {
           'Authorization': `Bearer ${trimmedKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://humanmodel.local',
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://humanmodel.app',
           'X-Title': 'Human Model AI Tracer'
         },
         body: JSON.stringify(requestBody)
