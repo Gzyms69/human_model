@@ -1,5 +1,5 @@
 import { createIcons, icons } from 'lucide';
-import { analyzeSituation, generateClarifyingQuestions, type SituationAnalysisResult } from '../aiService';
+import { analyzeSituation, generateClarifyingQuestions, type SituationAnalysisResult, type StreamCallbacks } from '../aiService';
 import { TracerAnimationController } from '../tracerAnimation';
 import { MIKRO_NODES } from '../data';
 import { initiateOpenRouterLogin } from '../openrouterAuth';
@@ -140,7 +140,40 @@ export class AiTracerPanel {
 
         <div id="ai-loading" class="ai-loading-state hidden">
           <div class="ai-spinner"></div>
-          <p id="ai-loading-text">Dekomponuję sytuację na czynniki pierwsze...</p>
+          <p id="ai-loading-text">Generuję głęboką sekwencję przepływu na grafie...</p>
+
+          <button id="btn-toggle-ai-terminal" class="btn-terminal-toggle">
+            <i data-lucide="terminal"></i>
+            <span>Szczegóły (Terminal Log & Myśli AI)</span>
+          </button>
+
+          <div id="ai-terminal-inspector" class="ai-terminal-inspector hidden">
+            <div class="terminal-bar">
+              <div class="terminal-dots">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span class="terminal-title">OpenRouter SSE Terminal Inspector</span>
+              </div>
+              <div id="terminal-metrics-badge" class="terminal-metrics">
+                <span id="metric-prompt-tok">Prompt: 0 tok</span> |
+                <span id="metric-gen-tok">Gen: 0 tok</span> |
+                <span id="metric-speed">0 tok/s</span>
+              </div>
+            </div>
+
+            <div class="terminal-tabs">
+              <button class="term-tab active" data-tab="tab-thoughts">Myśli AI (Reasoning)</button>
+              <button class="term-tab" data-tab="tab-raw">Strumień Surowy</button>
+              <button class="term-tab" data-tab="tab-logs">Konsola Logów</button>
+            </div>
+
+            <div class="terminal-content">
+              <pre id="terminal-thoughts-view" class="term-view active">Oczekiwanie na generowanie myśli modelu...</pre>
+              <pre id="terminal-raw-view" class="term-view hidden">Oczekiwanie na tokeny JSON...</pre>
+              <pre id="terminal-logs-view" class="term-view hidden">Inicjalizacja zapytań systemowych...</pre>
+            </div>
+          </div>
         </div>
 
         <div id="ai-error-box" class="ai-error-box hidden">
@@ -275,6 +308,32 @@ export class AiTracerPanel {
     this.container.querySelector('#btn-copy-report')?.addEventListener('click', () => {
       this.handleCopyReport();
     });
+
+    this.container.querySelector('#btn-toggle-ai-terminal')?.addEventListener('click', () => {
+      const inspector = this.container.querySelector('#ai-terminal-inspector');
+      inspector?.classList.toggle('hidden');
+    });
+
+    this.container.querySelectorAll('.term-tab').forEach((tabBtn) => {
+      tabBtn.addEventListener('click', (e) => {
+        const targetTab = (e.currentTarget as HTMLElement).getAttribute('data-tab');
+        if (!targetTab) return;
+
+        this.container.querySelectorAll('.term-tab').forEach((t) => t.classList.remove('active'));
+        (e.currentTarget as HTMLElement).classList.add('active');
+
+        this.container.querySelectorAll('.term-view').forEach((v) => {
+          v.classList.add('hidden');
+          v.classList.remove('active');
+        });
+
+        const targetView = this.container.querySelector(`#terminal-${targetTab.replace('tab-', '')}-view`);
+        if (targetView) {
+          targetView.classList.remove('hidden');
+          targetView.classList.add('active');
+        }
+      });
+    });
   }
 
   private setupTopPlayerEventListeners() {
@@ -364,6 +423,61 @@ export class AiTracerPanel {
     }
   }
 
+  private resetTerminalViews() {
+    const thoughts = this.container.querySelector('#terminal-thoughts-view');
+    const raw = this.container.querySelector('#terminal-raw-view');
+    const logs = this.container.querySelector('#terminal-logs-view');
+    const promptTok = this.container.querySelector('#metric-prompt-tok');
+    const genTok = this.container.querySelector('#metric-gen-tok');
+    const speed = this.container.querySelector('#metric-speed');
+
+    if (thoughts) thoughts.textContent = 'Oczekiwanie na generowanie myśli modelu...';
+    if (raw) raw.textContent = 'Oczekiwanie na tokeny JSON...';
+    if (logs) logs.textContent = '';
+    if (promptTok) promptTok.textContent = 'Prompt: 0 tok';
+    if (genTok) genTok.textContent = 'Gen: 0 tok';
+    if (speed) speed.textContent = '0 tok/s';
+  }
+
+  private createStreamCallbacks(): StreamCallbacks {
+    return {
+      onLog: (msg, type = 'info') => {
+        const logsView = this.container.querySelector('#terminal-logs-view');
+        if (!logsView) return;
+        const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const prefix = type === 'error' ? '[ERR]' : type === 'warn' ? '[WARN]' : type === 'success' ? '[OK]' : '[INFO]';
+        logsView.textContent += `[${time}] ${prefix} ${msg}\n`;
+        logsView.scrollTop = logsView.scrollHeight;
+      },
+      onReasoning: (thought) => {
+        const thoughtsView = this.container.querySelector('#terminal-thoughts-view');
+        if (!thoughtsView) return;
+        if (thoughtsView.textContent === 'Oczekiwanie na generowanie myśli modelu...') {
+          thoughtsView.textContent = '';
+        }
+        thoughtsView.textContent += thought;
+        thoughtsView.scrollTop = thoughtsView.scrollHeight;
+      },
+      onToken: (chunk) => {
+        const rawView = this.container.querySelector('#terminal-raw-view');
+        if (!rawView) return;
+        if (rawView.textContent === 'Oczekiwanie na tokeny JSON...') {
+          rawView.textContent = '';
+        }
+        rawView.textContent += chunk;
+        rawView.scrollTop = rawView.scrollHeight;
+      },
+      onMetrics: (metrics) => {
+        const promptEl = this.container.querySelector('#metric-prompt-tok');
+        const genEl = this.container.querySelector('#metric-gen-tok');
+        const speedEl = this.container.querySelector('#metric-speed');
+        if (promptEl) promptEl.textContent = `Prompt: ${metrics.promptTokens} tok`;
+        if (genEl) genEl.textContent = `Gen: ${metrics.completionTokens} tok`;
+        if (speedEl) speedEl.textContent = `${metrics.speedTokSec} tok/s`;
+      }
+    };
+  }
+
   private async handleStartInterview() {
     const textarea = this.container.querySelector('#ai-story-input') as HTMLTextAreaElement;
     const story = textarea?.value.trim();
@@ -374,6 +488,7 @@ export class AiTracerPanel {
     }
 
     this.hideError();
+    this.resetTerminalViews();
     this.showLoading(true, 'AI analizuje wstępnie sytuację i generuje pytania...');
     this.container.querySelector('#ai-results-wrapper')?.classList.add('hidden');
     this.container.querySelector('#ai-interview-wrapper')?.classList.add('hidden');
@@ -382,7 +497,7 @@ export class AiTracerPanel {
     const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
 
     try {
-      const questions = await generateClarifyingQuestions(story, keyInput?.value, modelSelect?.value);
+      const questions = await generateClarifyingQuestions(story, keyInput?.value, modelSelect?.value, this.createStreamCallbacks());
       this.renderInterviewQuestions(questions);
       this.container.querySelector('#ai-interview-wrapper')?.classList.remove('hidden');
       this.container.querySelector('#ai-interview-wrapper')?.scrollIntoView({ behavior: 'smooth' });
@@ -429,6 +544,7 @@ export class AiTracerPanel {
     }
 
     this.hideError();
+    this.resetTerminalViews();
     this.showLoading(true, 'Generuję głęboką sekwencję przepływu na grafie...');
     this.container.querySelector('#ai-interview-wrapper')?.classList.add('hidden');
 
@@ -436,7 +552,7 @@ export class AiTracerPanel {
     const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
 
     try {
-      const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value);
+      const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value, this.createStreamCallbacks());
       this.lastAnalysisResult = result;
       this.renderResults(result);
       
@@ -456,7 +572,6 @@ export class AiTracerPanel {
 
     wrapper.classList.remove('hidden');
 
-    // Context Card Render
     const storyTextEl = this.container.querySelector('#context-story-text');
     if (storyTextEl) storyTextEl.textContent = result.initialStory || 'Brak wpisu';
 

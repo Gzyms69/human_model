@@ -1774,6 +1774,132 @@ div.vis-tooltip {
   color: #fff;
 }
 
+/* AI TERMINAL INSPECTOR STYLES */
+.btn-terminal-toggle {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  color: #00e5ff;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  margin-top: 0.75rem;
+  transition: all 0.2s ease;
+}
+
+.btn-terminal-toggle:hover {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: #00e5ff;
+}
+
+.ai-terminal-inspector {
+  width: 100%;
+  background: #090b0e;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 8px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  text-align: left;
+}
+
+.terminal-bar {
+  background: #11151c;
+  padding: 0.4rem 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.terminal-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.terminal-title {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  margin-left: 0.4rem;
+}
+
+.terminal-metrics {
+  font-size: 0.66rem;
+  color: #00e5ff;
+}
+
+.terminal-tabs {
+  display: flex;
+  background: #0d1117;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.term-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 0.68rem;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.term-tab:hover {
+  color: #cbd5e1;
+}
+
+.term-tab.active {
+  color: #00e5ff;
+  border-bottom-color: #00e5ff;
+  background: rgba(0, 229, 255, 0.05);
+}
+
+.terminal-content {
+  padding: 0.65rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.term-view {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: #a7f3d0;
+  font-family: inherit;
+}
+
+#terminal-thoughts-view {
+  color: #c084fc;
+}
+
+#terminal-raw-view {
+  color: #93c5fd;
+}
+
+#terminal-logs-view {
+  color: #cbd5e1;
+}
+
 
 
 
