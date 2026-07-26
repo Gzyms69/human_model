@@ -33,15 +33,15 @@ export interface SituationAnalysisResult {
 }
 
 const DEFAULT_API_KEY = '';
-const DEFAULT_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-2-9b-it:free';
+const DEFAULT_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
 
 const FALLBACK_MODELS = [
-  'google/gemma-2-9b-it:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen-2.5-72b-instruct:free',
-  'deepseek/deepseek-r1:free',
-  'google/gemini-2.5-flash:free',
-  'openrouter/free'
+  'google/gemma-4-31b-it:free',
+  'openrouter/free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'openai/gpt-oss-20b:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free'
 ];
 
 function formatNodesContext(nodes: DomainNode[]): string {
