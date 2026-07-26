@@ -145,39 +145,6 @@ export class AiTracerPanel {
         <div id="ai-loading" class="ai-loading-state hidden">
           <div class="ai-spinner"></div>
           <p id="ai-loading-text">Generuję głęboką sekwencję przepływu na grafie...</p>
-
-          <button id="btn-toggle-ai-terminal" class="btn-terminal-toggle">
-            <i data-lucide="terminal"></i>
-            <span>Szczegóły (Terminal Log & Myśli AI)</span>
-          </button>
-
-          <div id="ai-terminal-inspector" class="ai-terminal-inspector hidden">
-            <div class="terminal-bar">
-              <div class="terminal-dots">
-                <span class="dot red"></span>
-                <span class="dot yellow"></span>
-                <span class="dot green"></span>
-                <span class="terminal-title">OpenRouter SSE Terminal Inspector</span>
-              </div>
-              <div id="terminal-metrics-badge" class="terminal-metrics">
-                <span id="metric-prompt-tok">Prompt: 0 tok</span> |
-                <span id="metric-gen-tok">Gen: 0 tok</span> |
-                <span id="metric-speed">0 tok/s</span>
-              </div>
-            </div>
-
-            <div class="terminal-tabs">
-              <button class="term-tab active" data-tab="tab-thoughts">Myśli AI (Reasoning)</button>
-              <button class="term-tab" data-tab="tab-raw">Strumień Surowy</button>
-              <button class="term-tab" data-tab="tab-logs">Konsola Logów</button>
-            </div>
-
-            <div class="terminal-content">
-              <pre id="terminal-thoughts-view" class="term-view active">Oczekiwanie na generowanie myśli modelu...</pre>
-              <pre id="terminal-raw-view" class="term-view hidden">Oczekiwanie na tokeny JSON...</pre>
-              <pre id="terminal-logs-view" class="term-view hidden">Inicjalizacja zapytań systemowych...</pre>
-            </div>
-          </div>
         </div>
 
         <div id="ai-error-box" class="ai-error-box hidden">
@@ -237,7 +204,44 @@ export class AiTracerPanel {
             </button>
           </div>
         </div>
+
+        <!-- PERSISTENT TERMINAL INSPECTOR AT VERY BOTTOM -->
+        <div id="ai-terminal-wrapper" class="ai-terminal-wrapper hidden">
+          <button id="btn-toggle-ai-terminal" class="btn-terminal-toggle">
+            <i data-lucide="terminal"></i>
+            <span>Szczegóły (Terminal Log & Myśli AI)</span>
+          </button>
+
+          <div id="ai-terminal-inspector" class="ai-terminal-inspector hidden">
+            <div class="terminal-bar">
+              <div class="terminal-dots">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span class="terminal-title">OpenRouter SSE Terminal Inspector</span>
+              </div>
+              <div id="terminal-metrics-badge" class="terminal-metrics">
+                <span id="metric-prompt-tok">Prompt: 0 tok</span> |
+                <span id="metric-gen-tok">Gen: 0 tok</span> |
+                <span id="metric-speed">0 tok/s</span>
+              </div>
+            </div>
+
+            <div class="terminal-tabs">
+              <button class="term-tab active" data-tab="tab-thoughts">Myśli AI (Reasoning)</button>
+              <button class="term-tab" data-tab="tab-raw">Strumień Surowy</button>
+              <button class="term-tab" data-tab="tab-logs">Konsola Logów</button>
+            </div>
+
+            <div class="terminal-content">
+              <pre id="terminal-thoughts-view" class="term-view active">Oczekiwanie na generowanie myśli modelu...</pre>
+              <pre id="terminal-raw-view" class="term-view hidden">Oczekiwanie na tokeny JSON...</pre>
+              <pre id="terminal-logs-view" class="term-view hidden">Inicjalizacja zapytań systemowych...</pre>
+            </div>
+          </div>
+        </div>
       </div>
+
     `;
 
     return panel;
@@ -574,9 +578,12 @@ export class AiTracerPanel {
 
   private renderResults(result: SituationAnalysisResult) {
     const wrapper = this.container.querySelector('#ai-results-wrapper');
+    const terminalWrapper = this.container.querySelector('#ai-terminal-wrapper');
     if (!wrapper) return;
 
     wrapper.classList.remove('hidden');
+    terminalWrapper?.classList.remove('hidden');
+
 
     const storyTextEl = this.container.querySelector('#context-story-text');
     if (storyTextEl) storyTextEl.textContent = result.initialStory || 'Brak wpisu';
@@ -740,13 +747,16 @@ export class AiTracerPanel {
   private showLoading(loading: boolean, text: string = 'Dekomponuję sytuację na czynniki pierwsze...') {
     const loadingState = this.container.querySelector('#ai-loading');
     const loadingText = this.container.querySelector('#ai-loading-text');
+    const terminalWrapper = this.container.querySelector('#ai-terminal-wrapper');
     if (loadingText) loadingText.textContent = text;
     if (loading) {
       loadingState?.classList.remove('hidden');
+      terminalWrapper?.classList.remove('hidden');
     } else {
       loadingState?.classList.add('hidden');
     }
   }
+
 
   private showError(msg: string) {
     const errBox = this.container.querySelector('#ai-error-box');
@@ -852,7 +862,9 @@ export class AiTracerPanel {
       this.showTopPlayer();
       this.animationController.loadTrace(this.lastAnalysisResult.storyNodes, this.lastAnalysisResult.matchedLinks);
       this.animationController.restoreActiveStep();
+      this.container.querySelector('#ai-terminal-wrapper')?.classList.remove('hidden');
     }
+
     createIcons({ icons });
   }
 
