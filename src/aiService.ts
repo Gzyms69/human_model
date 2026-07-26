@@ -33,34 +33,52 @@ export interface SituationAnalysisResult {
 }
 
 const DEFAULT_API_KEY = '';
-const DEFAULT_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-4-26b-a4b-it:free';
+const DEFAULT_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-2-9b-it:free';
 
 const FALLBACK_MODELS = [
-  'google/gemma-4-26b-a4b-it:free',
-  'openai/gpt-oss-20b:free',
-  'cohere/north-mini-code:free',
-  'nvidia/nemotron-3-nano-30b-a3b:free',
-  'google/gemma-4-31b-it:free',
-  'google/gemini-2.5-flash'
+  'google/gemma-2-9b-it:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'google/gemini-2.5-flash:free',
+  'openrouter/free'
 ];
 
 function formatNodesContext(nodes: DomainNode[]): string {
   return nodes
-    .map(
-      (n) =>
-        `- ID: "${n.id}" | Nazwa: "${n.title}" | Grupa: ${n.group || 'brak'}
-  Opis: ${n.description}`
-    )
-    .join('\n');
+    .map((n) => {
+      let text = `- ID: "${n.id}" | Nazwa: "${n.title}" | Grupa: ${n.group || 'brak'}\n  Opis: ${n.description}`;
+      if (n.psychology) text += `\n  Psychologia: ${n.psychology}`;
+      if (n.philosophy) text += `\n  Filozofia: ${n.philosophy}`;
+      if (n.science) text += `\n  Nauka: ${n.science}`;
+      if (n.lifehack) text += `\n  Stoper/Lifehack: ${n.lifehack}`;
+      return text;
+    })
+    .join('\n\n');
 }
 
 function formatLinksContext(links: DomainLink[]): string {
   return links
-    .map(
-      (l) =>
-        `- Relacja: ${l.from} -> ${l.to} [Typ: ${l.type}, Etykieta: "${l.label}"] (${l.description})`
-    )
+    .map((l) => {
+      let text = `- Relacja: ${l.from} -> ${l.to} [Typ: ${l.type}, Etykieta: "${l.label}"] (${l.description})`;
+      if (l.psychology) text += ` | Psychologia: ${l.psychology}`;
+      if (l.philosophy) text += ` | Filozofia: ${l.philosophy}`;
+      if (l.science) text += ` | Nauka: ${l.science}`;
+      if (l.lifehack) text += ` | Lifehack: ${l.lifehack}`;
+      return text;
+    })
     .join('\n');
+}
+
+function cleanJsonResponse(raw: string): any {
+  let cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  }
+  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+  return JSON.parse(cleaned);
 }
 
 export async function generateClarifyingQuestions(
@@ -106,8 +124,7 @@ Zwróć TYLKO czysty obiekt JSON:
         body: JSON.stringify({
           model: targetModel,
           messages: [{ role: 'user', content: prompt }],
-          temperature: 0.3,
-          response_format: { type: 'json_object' }
+          temperature: 0.3
         })
       });
 
@@ -117,8 +134,7 @@ Zwróć TYLKO czysty obiekt JSON:
       const raw = data.choices?.[0]?.message?.content;
       if (!raw) continue;
 
-      const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = cleanJsonResponse(raw);
       if (Array.isArray(parsed.questions) && parsed.questions.length >= 3) {
         return parsed.questions.slice(0, 3);
       }
@@ -167,25 +183,26 @@ export async function analyzeSituation(
   }
 
   const systemPrompt = `Jesteś światowej klasy analitykiem behawioralnym i twórcą systemu "Human Model".
-Twoim zadaniem jest dokładna dekompozycja sytuacji z życia użytkownika na ciągły, nieprzerwany przepływ przyczynowo-skutkowy po grafie.
+Twoim zadaniem jest dokładna dekompozycja sytuacji z życia użytkownika na ciągły, nieprzerwany przepływ przyczynowo-skutkowy po grafie systemowym.
 
-Dostępne Węzły Systemowe:
+Dostępne Węzły Systemowe wraz z ich wiedzą naukową, psychologiczną i filozoficzną:
 ${nodesContext}
 
 Istniejące Połączenia w Grafie:
 ${linksContext}
 ${formattedAnswersContext}
 KRYTYCZNE ZASADY ANALIZY SYSTEMOWEJ:
-1. **Dostępność i Przepływ**: Sytuacja to ciągła reakcja łańcuchowa.
+1. **Dostępność i Przepływ**: Sytuacja to ciągła reakcja łańcuchowa po istniejących krawędziach grafu.
 2. **BEZWZGLĘDNY OBOWIĄZEK JAŹNI / OBSERWATORA (m1)**: W KAŻDEJ analizie MUSISZ uwzględnić węzeł 'm1' (Jaźń / Obserwator). Wyjaśnij czy Jaźń/Obserwator zadziałała, czy też została wyparta przez automat.
-3. **Opis Mechaniki Kroku (whyItHappened)**: Opisz DOKŁADNIE dlaczego ten konkretny węzeł aktywował się w tej sytuacji. NIE DAWAJ TU PORAD ANI LIFEHACKÓW. Porady dajesz WYŁĄCZNIE w sekcji operationalLifehack!
+3. **Głębokie Uzasadnienie (whyItHappened)**: Wykorzystaj przekazaną wiedzę naukową, psychologiczną i filozoficzną przypisaną do danego węzła i relacji. Wyjaśnij mechanicznie dlaczego ten węzeł aktywował się w tej sytuacji. Nie dawaj tu lifehacków.
+4. **Lifehack (operationalLifehack)**: Wykorzystaj dedykowane lifehacki przypisane do aktywnych węzłów.
 
 Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 {
-  "summary": "Krótkie 2-3 zdaniowe podsumowanie mechaniki całej sytuacji.",
+  "summary": "Krótkie 2-3 zdaniowe podsumowanie mechaniki całej sytuacji, odwołujące się do naukowej podszewki zdarzenia.",
   "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
   "edgeExplanations": [
-    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przeniesienia impetu." }
+    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przeniesienia impetu z uwzględnieniem typu relacji." }
   ],
   "steps": [
     {
@@ -198,7 +215,7 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
     }
   ],
   "observerRoleSummary": "Kluczowy podsumowujący opis roli Jaźni (m1) w tej sytuacji.",
-  "rootCause": "Mechaniczna przyczyna źródłowa zdarzenia.",
+  "rootCause": "Mechaniczna przyczyna źródłowa zdarzenia na poziomie systemowym.",
   "operationalLifehack": "Wskazówka operacyjna (Stoper) zapobiegająca powtórzeniu w przyszłości."
 }
 `;
@@ -212,16 +229,6 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 
   for (const targetModel of candidateModels) {
     try {
-      const requestBody = {
-        model: targetModel,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Oto sytuacja do dekompozycji: "${userStory}"` }
-        ],
-        temperature: 0.2,
-        response_format: { type: 'json_object' }
-      };
-
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -230,7 +237,14 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
           'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://humanmodel.app',
           'X-Title': 'Human Model AI Tracer'
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          model: targetModel,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Oto sytuacja do dekompozycji: "${userStory}"` }
+          ],
+          temperature: 0.2
+        })
       });
 
       if (!response.ok) {
@@ -250,8 +264,7 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
       const rawContent = data.choices?.[0]?.message?.content;
       if (!rawContent) continue;
 
-      const cleanedJsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-      const result: SituationAnalysisResult = JSON.parse(cleanedJsonStr);
+      const result: SituationAnalysisResult = cleanJsonResponse(rawContent);
       
       const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
       const rawNodes = (result.storyNodes || []).filter((id) => validNodeIds.has(id));
@@ -269,7 +282,7 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
       return result;
     } catch (err: any) {
       console.warn(`Error on model ${targetModel}:`, err);
-      lastErrorMsg = err.message || 'Connection error';
+      lastErrorMsg = err.message || 'Błąd połączenia lub parsowania JSON';
     }
   }
 
@@ -318,15 +331,17 @@ async function analyzeWithGoogleDirect(
   }
 
   const prompt = `Jesteś analitykiem behawioralnym w projekcie Human Model.
-Węzły:
+Węzły z pełnymi opisami naukowo-psychologicznymi:
 ${nodesContext}
+
 Relacje:
 ${linksContext}
+
 Wywiad: ${formattedAnswers}
 
-Zwróć TYLKO wygenerowany JSON:
+Zwróć TYLKO czysty wygenerowany JSON:
 {
-  "summary": "Podsumowanie",
+  "summary": "Podsumowanie ze wskaźnikami naukowymi",
   "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
   "edgeExplanations": [
     { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przejścia" }
@@ -338,7 +353,7 @@ Zwróć TYLKO wygenerowany JSON:
       "title": "Biochemia",
       "trigger": "Wyzwalacz",
       "whatHappened": "Co się stało",
-      "whyItHappened": "Dlaczego mechanicznie",
+      "whyItHappened": "Dlaczego mechanicznie (nauka/psychologia)",
       "isSelfObserver": false
     }
   ],
@@ -369,8 +384,7 @@ Sytuacja: "${userStory}"`;
   const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!rawContent) throw new Error('Otrzymano pustą odpowiedź z Google AI Studio');
 
-  const cleanedJsonStr = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
-  const result: SituationAnalysisResult = JSON.parse(cleanedJsonStr);
+  const result: SituationAnalysisResult = cleanJsonResponse(rawContent);
 
   const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
   const rawNodes = (result.storyNodes || []).filter((id) => validNodeIds.has(id));

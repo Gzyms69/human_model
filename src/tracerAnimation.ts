@@ -8,6 +8,8 @@ export class TracerAnimationController {
   private edgesDataSet: DataSet<Edge>;
   private sourceNodes: DomainNode[];
   private sourceLinks: DomainLink[];
+  private nodeMapper?: (dn: DomainNode) => Node;
+  private edgeMapper?: (dl: DomainLink) => Edge;
 
   private storyNodes: string[] = [];
   private matchedLinks: DomainLink[] = [];
@@ -24,13 +26,17 @@ export class TracerAnimationController {
     nodesDataSet: DataSet<Node>,
     edgesDataSet: DataSet<Edge>,
     sourceNodes: DomainNode[],
-    sourceLinks: DomainLink[]
+    sourceLinks: DomainLink[],
+    nodeMapper?: (dn: DomainNode) => Node,
+    edgeMapper?: (dl: DomainLink) => Edge
   ) {
     this.network = network;
     this.nodesDataSet = nodesDataSet;
     this.edgesDataSet = edgesDataSet;
     this.sourceNodes = sourceNodes;
     this.sourceLinks = sourceLinks;
+    this.nodeMapper = nodeMapper;
+    this.edgeMapper = edgeMapper;
   }
 
   public updateReferences(
@@ -38,13 +44,17 @@ export class TracerAnimationController {
     nodesDataSet: DataSet<Node>,
     edgesDataSet: DataSet<Edge>,
     sourceNodes: DomainNode[],
-    sourceLinks: DomainLink[]
+    sourceLinks: DomainLink[],
+    nodeMapper?: (dn: DomainNode) => Node,
+    edgeMapper?: (dl: DomainLink) => Edge
   ) {
     this.network = network;
     this.nodesDataSet = nodesDataSet;
     this.edgesDataSet = edgesDataSet;
     this.sourceNodes = sourceNodes;
     this.sourceLinks = sourceLinks;
+    this.nodeMapper = nodeMapper;
+    this.edgeMapper = edgeMapper;
   }
 
   public loadTrace(storyNodes: string[], matchedLinks: DomainLink[] = []) {
@@ -111,7 +121,7 @@ export class TracerAnimationController {
     this.currentIndex++;
     if (this.currentIndex >= this.storyNodes.length) {
       this.isPlaying = false;
-      this.currentIndex = this.storyNodes.length - 1; // Clamp to last index
+      this.currentIndex = this.storyNodes.length - 1;
       this.notifyState();
       return;
     }
@@ -136,37 +146,43 @@ export class TracerAnimationController {
     const storyNodeSet = new Set(this.storyNodes);
 
     this.nodesDataSet.update(
-      this.nodesDataSet.get().map((n) => {
-        const idStr = n.id as string;
-        if (idStr === 'm1' && storyNodeSet.has('m1')) {
-          // Special Observer dimming highlight
+      this.sourceNodes.map((dn) => {
+        const mapped = this.nodeMapper ? this.nodeMapper(dn) : null;
+        const baseBorder = (mapped?.color as any)?.border || '#00e5ff';
+        const baseBg = (mapped?.color as any)?.background || 'rgba(0, 229, 255, 0.1)';
+
+        if (dn.id === 'm1' && storyNodeSet.has('m1')) {
           return {
-            id: n.id,
-            color: { background: 'rgba(168, 85, 247, 0.25)', border: '#c084fc' },
+            id: dn.id,
+            color: { background: 'rgba(168, 85, 247, 0.35)', border: '#c084fc' },
             font: { color: '#e9d5ff', size: 14 }
           };
-        } else if (idStr && storyNodeSet.has(idStr)) {
+        } else if (storyNodeSet.has(dn.id)) {
           return {
-            id: n.id,
-            color: { background: 'rgba(30, 40, 55, 0.6)', border: 'rgba(0, 229, 255, 0.4)' },
-            font: { color: 'rgba(255, 255, 255, 0.7)', size: 12 }
+            id: dn.id,
+            color: { background: baseBg, border: baseBorder },
+            font: { color: 'rgba(255, 255, 255, 0.85)', size: 12 }
           };
         } else {
           return {
-            id: n.id,
+            id: dn.id,
             color: { background: 'rgba(20, 22, 28, 0.25)', border: 'rgba(50, 60, 75, 0.3)' },
-            font: { color: 'rgba(255, 255, 255, 0.15)', size: 10 }
+            font: { color: 'rgba(255, 255, 255, 0.18)', size: 10 }
           };
         }
       })
     );
 
     this.edgesDataSet.update(
-      this.edgesDataSet.get().map((e) => ({
-        id: e.id,
-        color: { color: 'rgba(40, 50, 65, 0.15)' },
-        width: 1
-      }))
+      this.sourceLinks.map((dl) => {
+        const mapped = this.edgeMapper ? this.edgeMapper(dl) : null;
+        return {
+          id: mapped?.id || dl.id || `${dl.from}-${dl.to}-${dl.type}`,
+          color: { color: 'rgba(40, 50, 65, 0.15)' },
+          dashes: mapped?.dashes,
+          width: 1
+        };
+      })
     );
   }
 
@@ -176,16 +192,16 @@ export class TracerAnimationController {
     const activeNodeId = this.storyNodes[this.currentIndex];
     const visitedNodes = new Set(this.storyNodes.slice(0, this.currentIndex + 1));
 
-    // Update nodes
     this.nodesDataSet.update(
-      this.nodesDataSet.get().map((n) => {
-        const idStr = n.id as string;
+      this.sourceNodes.map((dn) => {
+        const mapped = this.nodeMapper ? this.nodeMapper(dn) : null;
+        const baseBorder = (mapped?.color as any)?.border || '#00e5ff';
+        const baseGlow = (mapped?.shadow as any)?.color || baseBorder;
 
-        if (idStr === activeNodeId) {
-          if (idStr === 'm1') {
-            // Active Observer (m1) Node - Glowing Violet Pulse
+        if (dn.id === activeNodeId) {
+          if (dn.id === 'm1') {
             return {
-              id: n.id,
+              id: dn.id,
               color: {
                 background: '#a855f7',
                 border: '#ffffff',
@@ -195,47 +211,47 @@ export class TracerAnimationController {
               shadow: { enabled: true, color: '#a855f7', size: 35, x: 0, y: 0 }
             };
           }
-
-          // Active Standard Node - Glowing Cyan Pulse
           return {
-            id: n.id,
+            id: dn.id,
             color: {
-              background: '#00e5ff',
+              background: baseBorder,
               border: '#ffffff',
-              highlight: { background: '#00ffaa', border: '#ffffff' }
+              highlight: { background: baseBorder, border: '#ffffff' }
             },
             font: { color: '#ffffff', size: 16 },
-            shadow: { enabled: true, color: '#00e5ff', size: 30, x: 0, y: 0 }
+            shadow: { enabled: true, color: baseGlow, size: 32, x: 0, y: 0 }
           };
-        } else if (visitedNodes.has(idStr)) {
-          if (idStr === 'm1') {
+        } else if (visitedNodes.has(dn.id)) {
+          if (dn.id === 'm1') {
             return {
-              id: n.id,
-              color: { background: 'rgba(168, 85, 247, 0.5)', border: '#c084fc' },
+              id: dn.id,
+              color: { background: 'rgba(168, 85, 247, 0.55)', border: '#c084fc' },
               font: { color: '#f3e8ff', size: 14 },
               shadow: { enabled: true, color: '#a855f7', size: 20, x: 0, y: 0 }
             };
           }
-
           return {
-            id: n.id,
+            id: dn.id,
             color: {
-              background: 'rgba(0, 229, 255, 0.35)',
-              border: '#00e5ff'
+              background: baseBorder,
+              border: baseBorder
             },
             font: { color: 'rgba(255, 255, 255, 0.95)', size: 13 },
-            shadow: { enabled: true, color: '#00e5ff', size: 15, x: 0, y: 0 }
+            shadow: { enabled: true, color: baseGlow, size: 16, x: 0, y: 0 }
           };
-        } else if (this.storyNodes.includes(idStr)) {
+        } else if (this.storyNodes.includes(dn.id)) {
           return {
-            id: n.id,
-            color: { background: 'rgba(255, 255, 255, 0.08)', border: 'rgba(0, 229, 255, 0.3)' },
+            id: dn.id,
+            color: {
+              background: (mapped?.color as any)?.background || 'rgba(255, 255, 255, 0.08)',
+              border: baseBorder
+            },
             font: { color: 'rgba(255, 255, 255, 0.5)', size: 11 },
             shadow: false
           };
         } else {
           return {
-            id: n.id,
+            id: dn.id,
             color: { background: 'rgba(15, 18, 24, 0.15)', border: 'rgba(40, 45, 55, 0.2)' },
             font: { color: 'rgba(255, 255, 255, 0.1)' },
             shadow: false
@@ -244,13 +260,11 @@ export class TracerAnimationController {
       })
     );
 
-    // Collect all active trace edges connecting visited nodes in sequence
     const activeTraceEdgeIds = new Set<string>();
     for (let i = 0; i < this.currentIndex; i++) {
       const u = this.storyNodes[i];
       const v = this.storyNodes[i + 1];
 
-      // Check in matchedLinks or sourceLinks
       const edge =
         this.matchedLinks.find((l) => (l.from === u && l.to === v) || (l.from === v && l.to === u)) ||
         this.sourceLinks.find((l) => (l.from === u && l.to === v) || (l.from === v && l.to === u));
@@ -261,28 +275,38 @@ export class TracerAnimationController {
     }
 
     this.edgesDataSet.update(
-      this.edgesDataSet.get().map((e) => {
-        const idStr = e.id as string;
-        if (activeTraceEdgeIds.has(idStr)) {
+      this.sourceLinks.map((dl) => {
+        const mapped = this.edgeMapper ? this.edgeMapper(dl) : null;
+        const edgeId = String(mapped?.id || dl.id || `${dl.from}-${dl.to}-${dl.type}`);
+        const baseColor = (mapped?.color as any)?.color || 'rgba(255, 255, 255, 0.25)';
+
+        if (activeTraceEdgeIds.has(edgeId)) {
+          let traceColor = baseColor;
+          if (dl.type === 'flow') traceColor = '#ffffff';
+          else if (dl.type === 'override') traceColor = '#00e5ff';
+          else if (dl.type === 'conflict') traceColor = '#ff003c';
+          else if (dl.type === 'awareness') traceColor = '#ffffff';
+
           return {
-            id: e.id,
-            color: { color: '#00e5ff', highlight: '#00ffaa' },
-            width: 4.5,
-            arrows: { to: { enabled: true, scaleFactor: 1.0 } },
-            shadow: { enabled: true, color: '#00e5ff', size: 15, x: 0, y: 0 }
+            id: edgeId,
+            color: { color: traceColor, highlight: traceColor },
+            width: Math.max(((mapped?.width as number) || 1.5) * 2, 3),
+            dashes: mapped?.dashes,
+            arrows: mapped?.arrows || { to: { enabled: true, scaleFactor: 1.0 } },
+            shadow: { enabled: true, color: traceColor, size: 15, x: 0, y: 0 }
           };
         } else {
           return {
-            id: e.id,
+            id: edgeId,
             color: { color: 'rgba(40, 50, 65, 0.12)' },
             width: 1,
+            dashes: mapped?.dashes,
             shadow: false
           };
         }
       })
     );
 
-    // Camera focus on active node
     try {
       this.network.focus(activeNodeId, {
         scale: 1.05,
@@ -297,26 +321,26 @@ export class TracerAnimationController {
   }
 
   private resetGraphVisuals() {
-    this.nodesDataSet.update(
-      this.sourceNodes.map((dn) => {
-        return {
+    if (this.nodeMapper && this.edgeMapper) {
+      this.nodesDataSet.update(this.sourceNodes.map(this.nodeMapper));
+      this.edgesDataSet.update(this.sourceLinks.map(this.edgeMapper));
+    } else {
+      this.nodesDataSet.update(
+        this.sourceNodes.map((dn) => ({
           id: dn.id,
-          color: {
-            border: '#00e5ff',
-            background: 'rgba(0, 229, 255, 0.1)'
-          },
+          color: { border: '#00e5ff', background: 'rgba(0, 229, 255, 0.1)' },
           font: { color: '#ffffff', size: 14 }
-        };
-      })
-    );
+        }))
+      );
 
-    this.edgesDataSet.update(
-      this.sourceLinks.map((dl) => ({
-        id: dl.id || `${dl.from}-${dl.to}-${dl.type}`,
-        color: { color: 'rgba(255, 255, 255, 0.25)' },
-        width: 1.5
-      }))
-    );
+      this.edgesDataSet.update(
+        this.sourceLinks.map((dl) => ({
+          id: dl.id || `${dl.from}-${dl.to}-${dl.type}`,
+          color: { color: 'rgba(255, 255, 255, 0.25)' },
+          width: 1.5
+        }))
+      );
+    }
 
     try {
       this.network.fit({ animation: { duration: 800, easingFunction: 'easeInOutQuad' } });

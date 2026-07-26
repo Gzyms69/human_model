@@ -25,7 +25,7 @@ export class AiTracerPanel {
     panel.className = 'ai-panel hidden';
 
     const savedKey = localStorage.getItem('human_model_openrouter_key') || '';
-    const savedModel = localStorage.getItem('human_model_openrouter_model') || 'google/gemma-4-26b-a4b-it:free';
+    const savedModel = localStorage.getItem('human_model_openrouter_model') || 'google/gemma-2-9b-it:free';
 
     panel.innerHTML = `
       <div class="ai-panel-header">
@@ -55,12 +55,12 @@ export class AiTracerPanel {
         <label>
           Model Domyślny OpenRouter:
           <select id="select-openrouter-model" class="model-select">
-            <option value="google/gemma-4-26b-a4b-it:free" ${savedModel === 'google/gemma-4-26b-a4b-it:free' ? 'selected' : ''}>Google Gemma 4 26B (Free)</option>
-            <option value="openai/gpt-oss-20b:free" ${savedModel === 'openai/gpt-oss-20b:free' ? 'selected' : ''}>OpenAI GPT OSS 20B (Free)</option>
-            <option value="cohere/north-mini-code:free" ${savedModel === 'cohere/north-mini-code:free' ? 'selected' : ''}>Cohere North Mini (Free)</option>
-            <option value="nvidia/nemotron-3-nano-30b-a3b:free" ${savedModel === 'nvidia/nemotron-3-nano-30b-a3b:free' ? 'selected' : ''}>Nvidia Nemotron 3 Nano (Free)</option>
-            <option value="google/gemma-4-31b-it:free" ${savedModel === 'google/gemma-4-31b-it:free' ? 'selected' : ''}>Google Gemma 4 31B (Free)</option>
-            <option value="google/gemini-2.5-flash" ${savedModel === 'google/gemini-2.5-flash' ? 'selected' : ''}>Google Gemini 2.5 Flash (Paid)</option>
+            <option value="google/gemma-2-9b-it:free" ${savedModel === 'google/gemma-2-9b-it:free' ? 'selected' : ''}>Google Gemma 2 9B (Free)</option>
+            <option value="meta-llama/llama-3.3-70b-instruct:free" ${savedModel === 'meta-llama/llama-3.3-70b-instruct:free' ? 'selected' : ''}>Meta LLaMA 3.3 70B (Free)</option>
+            <option value="qwen/qwen-2.5-72b-instruct:free" ${savedModel === 'qwen/qwen-2.5-72b-instruct:free' ? 'selected' : ''}>Qwen 2.5 72B (Free)</option>
+            <option value="deepseek/deepseek-r1:free" ${savedModel === 'deepseek/deepseek-r1:free' ? 'selected' : ''}>DeepSeek R1 (Free)</option>
+            <option value="google/gemini-2.5-flash:free" ${savedModel === 'google/gemini-2.5-flash:free' ? 'selected' : ''}>Google Gemini 2.5 Flash (Free)</option>
+            <option value="openrouter/free" ${savedModel === 'openrouter/free' ? 'selected' : ''}>Auto OpenRouter Router (Free)</option>
           </select>
         </label>
         <div class="settings-actions">

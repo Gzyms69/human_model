@@ -29,7 +29,7 @@ const colors = {
   awareness: { border: '#ffffff', background: 'rgba(255, 255, 255, 0.1)', glow: '#ffffff' }
 };
 
-function mapNode(dn: DomainNode): Node {
+export function mapNode(dn: DomainNode): Node {
   const g = dn.group as keyof typeof colors || 'environmental';
   const c = colors[g];
   
@@ -80,7 +80,7 @@ function mapNode(dn: DomainNode): Node {
   return node;
 }
 
-function mapEdge(dl: DomainLink): Edge {
+export function mapEdge(dl: DomainLink): Edge {
   const dir = dl.direction || 'to';
   let arrowsConfig: any = false;
 
@@ -219,7 +219,9 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       nodesDataSet,
       edgesDataSet,
       sourceNodes,
-      sourceLinks
+      sourceLinks,
+      mapNode,
+      mapEdge
     );
     aiPanel = new AiTracerPanel(tracerController);
   } else {
@@ -228,7 +230,9 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       nodesDataSet,
       edgesDataSet,
       sourceNodes,
-      sourceLinks
+      sourceLinks,
+      mapNode,
+      mapEdge
     );
   }
 
