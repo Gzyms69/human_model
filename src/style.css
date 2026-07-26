@@ -769,6 +769,110 @@ div.vis-tooltip {
   gap: 1.25rem;
 }
 
+/* LOGIN WALL STYLES */
+.ai-login-wall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.ai-login-wall.hidden {
+  display: none;
+}
+
+.login-wall-card {
+  background: rgba(20, 26, 35, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 14px;
+  padding: 1.75rem 1.25rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.login-icon-badge {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(255, 0, 127, 0.2));
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #00e5ff;
+  font-size: 1.5rem;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
+}
+
+.login-wall-card h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #f8fafc;
+}
+
+.login-wall-card p {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.btn-openrouter-login {
+  width: 100%;
+  background: #ffffff;
+  color: #1e293b;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+}
+
+.btn-openrouter-login:hover {
+  background: #f1f5f9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.25);
+}
+
+.google-icon {
+  flex-shrink: 0;
+}
+
+.login-wall-footer {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #00e5ff;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.btn-link:hover {
+  color: #80f2ff;
+}
+
+
 .input-label {
   font-size: 0.82rem;
   font-weight: 500;

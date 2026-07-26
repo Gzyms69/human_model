@@ -5,6 +5,7 @@ import { createIcons, icons } from 'lucide';
 import { MIKRO_NODES, MAKRO_NODES, MIKRO_LINKS, MAKRO_LINKS, type DomainNode, type DomainLink } from './data';
 import { TracerAnimationController } from './tracerAnimation';
 import { AiTracerPanel } from './ui/aiTracerPanel';
+import { checkForOpenRouterAuthCallback } from './openrouterAuth';
 
 createIcons({ icons });
 
@@ -856,3 +857,9 @@ if (btnAiTracer) {
 }
 
 renderNetwork(currentMode);
+
+checkForOpenRouterAuthCallback().then((authenticated) => {
+  if (authenticated && aiPanel) {
+    aiPanel.open();
+  }
+});
