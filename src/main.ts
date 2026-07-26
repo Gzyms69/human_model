@@ -821,7 +821,6 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 document.getElementById('details-bar')!.addEventListener('click', () => {
   document.getElementById('side-panel')!.classList.remove('hidden');
   document.getElementById('details-bar')!.classList.add('hidden');
-  document.getElementById('system-log')!.classList.add('collapsed');
   createIcons({ icons });
 });
 
@@ -846,12 +845,81 @@ document.querySelector('[data-tab="makro"]')!.addEventListener('click', (e) => {
   renderNetwork(currentMode);
 });
 
+const sysLog = document.getElementById('system-log');
 const logToggle = document.getElementById('log-toggle');
-if (logToggle) {
-  logToggle.addEventListener('click', () => {
-    document.getElementById('system-log')!.classList.toggle('collapsed');
+if (sysLog && logToggle) {
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initialLeft = 0;
+  let initialTop = 0;
+  let totalMoved = 0;
+
+  logToggle.addEventListener('pointerdown', (e: PointerEvent) => {
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    totalMoved = 0;
+
+    const rect = sysLog.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+
+    sysLog.style.left = `${initialLeft}px`;
+    sysLog.style.top = `${initialTop}px`;
+    sysLog.style.right = 'auto';
+    sysLog.style.bottom = 'auto';
+    sysLog.classList.add('is-dragging');
+
+    try {
+      logToggle.setPointerCapture(e.pointerId);
+    } catch {}
+    e.preventDefault();
   });
+
+  logToggle.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    totalMoved = Math.sqrt(dx * dx + dy * dy);
+
+    let newLeft = initialLeft + dx;
+    let newTop = initialTop + dy;
+
+    const maxLeft = window.innerWidth - sysLog.offsetWidth - 10;
+    const maxTop = window.innerHeight - sysLog.offsetHeight - 10;
+    if (newLeft < 10) newLeft = 10;
+    if (newTop < 10) newTop = 10;
+    if (newLeft > maxLeft) newLeft = Math.max(10, maxLeft);
+    if (newTop > maxTop) newTop = Math.max(10, maxTop);
+
+    sysLog.style.left = `${newLeft}px`;
+    sysLog.style.top = `${newTop}px`;
+    e.preventDefault();
+  });
+
+  const stopDrag = (e: PointerEvent) => {
+    if (!isDragging) return;
+    isDragging = false;
+    sysLog.classList.remove('is-dragging');
+    try {
+      logToggle.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    if (totalMoved < 5) {
+      const chevron = document.getElementById('log-chevron');
+      const isCollapsed = sysLog.classList.toggle('collapsed');
+      if (chevron) {
+        chevron.setAttribute('data-lucide', isCollapsed ? 'chevron-down' : 'chevron-up');
+        createIcons({ icons });
+      }
+    }
+  };
+
+  logToggle.addEventListener('pointerup', stopDrag);
+  logToggle.addEventListener('pointercancel', stopDrag);
 }
+
 
 const btnAiTracer = document.getElementById('btn-ai-tracer');
 if (btnAiTracer) {

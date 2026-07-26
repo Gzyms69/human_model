@@ -66,6 +66,16 @@ export class TracerAnimationController {
     this.dimGraph();
   }
 
+  public restoreActiveStep() {
+    if (this.storyNodes.length === 0) return;
+    if (this.currentIndex < 0) {
+      this.currentIndex = 0;
+    }
+    this.dimGraph();
+    this.renderCurrentStep();
+    this.notifyState();
+  }
+
   public play() {
     if (this.storyNodes.length === 0) return;
     if (this.currentIndex >= this.storyNodes.length - 1) {

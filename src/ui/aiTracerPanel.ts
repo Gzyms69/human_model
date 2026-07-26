@@ -28,6 +28,7 @@ export class AiTracerPanel {
     const savedModel = localStorage.getItem('human_model_openrouter_model') || 'google/gemma-4-31b-it:free';
 
     panel.innerHTML = `
+      <div id="ai-panel-resizer" class="ai-panel-resizer" title="Przeciągnij, aby zmienić wysokość"></div>
       <div class="ai-panel-header">
         <div class="ai-title-wrap">
           <div class="ai-icon-badge"><i data-lucide="sparkles"></i></div>
@@ -37,6 +38,9 @@ export class AiTracerPanel {
           </div>
         </div>
         <div class="ai-header-actions">
+          <button id="btn-minimize-ai-panel" class="icon-btn-sm" title="Zwiń / Rozwiń">
+            <i data-lucide="chevron-down"></i>
+          </button>
           <button id="btn-ai-settings" class="icon-btn-sm" title="Ustawienia API">
             <i data-lucide="settings"></i>
           </button>
@@ -240,6 +244,8 @@ export class AiTracerPanel {
   }
 
   private setupEventListeners() {
+    this.setupResizerAndMinimize();
+
     this.container.querySelector('#btn-close-ai-panel')?.addEventListener('click', () => {
       this.close();
     });
@@ -773,9 +779,80 @@ export class AiTracerPanel {
     }
   }
 
+  private setupResizerAndMinimize() {
+    const resizer = this.container.querySelector('#ai-panel-resizer') as HTMLElement;
+    const minimizeBtn = this.container.querySelector('#btn-minimize-ai-panel');
+
+    let startY = 0;
+    let startHeight = 0;
+    let isDragging = false;
+
+    if (resizer) {
+      resizer.addEventListener('pointerdown', (e: PointerEvent) => {
+        isDragging = true;
+        startY = e.clientY;
+        startHeight = this.container.offsetHeight;
+        this.container.classList.add('is-resizing');
+        try {
+          resizer.setPointerCapture(e.pointerId);
+        } catch {}
+        e.preventDefault();
+      });
+
+      resizer.addEventListener('pointermove', (e: PointerEvent) => {
+        if (!isDragging) return;
+        const deltaY = startY - e.clientY;
+        let newHeight = startHeight + deltaY;
+        const maxHeight = window.innerHeight * 0.85;
+        const minHeight = 100;
+        if (newHeight < minHeight) newHeight = minHeight;
+        if (newHeight > maxHeight) newHeight = maxHeight;
+        this.container.style.height = `${newHeight}px`;
+        if (this.container.classList.contains('minimized')) {
+          this.container.classList.remove('minimized');
+        }
+        e.preventDefault();
+      });
+
+      const stopDrag = (e: PointerEvent) => {
+        if (!isDragging) return;
+        isDragging = false;
+        this.container.classList.remove('is-resizing');
+        try {
+          resizer.releasePointerCapture(e.pointerId);
+        } catch {}
+      };
+
+      resizer.addEventListener('pointerup', stopDrag);
+      resizer.addEventListener('pointercancel', stopDrag);
+    }
+
+    if (minimizeBtn) {
+      minimizeBtn.addEventListener('click', () => {
+        this.toggleMinimize();
+      });
+    }
+  }
+
+  public toggleMinimize() {
+    const isMin = this.container.classList.toggle('minimized');
+    const minimizeBtn = this.container.querySelector('#btn-minimize-ai-panel i');
+    if (minimizeBtn) {
+      minimizeBtn.setAttribute('data-lucide', isMin ? 'chevron-up' : 'chevron-down');
+      createIcons({ icons });
+    }
+  }
+
   public open() {
     this.updateAuthState();
     this.container.classList.remove('hidden');
+    this.container.classList.remove('minimized');
+    document.getElementById('ai-bottom-dock')?.classList.add('hidden');
+    if (this.lastAnalysisResult) {
+      this.showTopPlayer();
+      this.animationController.loadTrace(this.lastAnalysisResult.storyNodes, this.lastAnalysisResult.matchedLinks);
+      this.animationController.restoreActiveStep();
+    }
     createIcons({ icons });
   }
 
@@ -783,6 +860,7 @@ export class AiTracerPanel {
     this.container.classList.add('hidden');
     this.hideTopPlayer();
     this.animationController.reset();
+    document.getElementById('ai-bottom-dock')?.classList.remove('hidden');
   }
 
   public toggle() {
@@ -793,3 +871,4 @@ export class AiTracerPanel {
     }
   }
 }
+
