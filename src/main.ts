@@ -3,6 +3,9 @@ import { Network, type Options, type Edge, type Node } from 'vis-network';
 import { DataSet } from 'vis-data';
 import { createIcons, icons } from 'lucide';
 import { MIKRO_NODES, MAKRO_NODES, MIKRO_LINKS, MAKRO_LINKS, type DomainNode, type DomainLink } from './data';
+import { TracerAnimationController } from './tracerAnimation';
+import { AiTracerPanel } from './ui/aiTracerPanel';
+import { checkForOpenRouterAuthCallback } from './openrouterAuth';
 
 createIcons({ icons });
 
@@ -14,6 +17,8 @@ let nodesDataSet = new DataSet<Node>([]);
 let edgesDataSet = new DataSet<Edge>([]);
 let chaosInterval: number | null = null;
 let clearSelection: (() => void) | null = null;
+let tracerController: TracerAnimationController | null = null;
+let aiPanel: AiTracerPanel | null = null;
 
 const colors = {
   cognitive: { border: '#00e5ff', background: 'rgba(0, 229, 255, 0.1)', glow: '#00e5ff' },
@@ -207,6 +212,25 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
   };
 
   network = new Network(container, { nodes: nodesDataSet, edges: edgesDataSet }, options);
+
+  if (!tracerController) {
+    tracerController = new TracerAnimationController(
+      network,
+      nodesDataSet,
+      edgesDataSet,
+      sourceNodes,
+      sourceLinks
+    );
+    aiPanel = new AiTracerPanel(tracerController);
+  } else {
+    tracerController.updateReferences(
+      network,
+      nodesDataSet,
+      edgesDataSet,
+      sourceNodes,
+      sourceLinks
+    );
+  }
 
   let selectedNodeId: string | null = null;
   let selectedEdgeId: string | null = null;
@@ -825,4 +849,17 @@ if (logToggle) {
   });
 }
 
+const btnAiTracer = document.getElementById('btn-ai-tracer');
+if (btnAiTracer) {
+  btnAiTracer.addEventListener('click', () => {
+    aiPanel?.toggle();
+  });
+}
+
 renderNetwork(currentMode);
+
+checkForOpenRouterAuthCallback().then((authenticated) => {
+  if (authenticated && aiPanel) {
+    aiPanel.open();
+  }
+});
