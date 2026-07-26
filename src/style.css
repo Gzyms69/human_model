@@ -748,11 +748,12 @@ div.vis-tooltip {
 }
 
 .btn-ai-dock-main:hover {
-  transform: translateX(-50%) scale(1.04);
+  transform: scale(1.04);
   background: linear-gradient(135deg, rgba(0, 229, 255, 0.35) 0%, rgba(255, 0, 127, 0.35) 100%);
   border-color: #00e5ff;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(0, 229, 255, 0.45);
 }
+
 
 .btn-ai-dock-main svg {
   color: #00e5ff;
