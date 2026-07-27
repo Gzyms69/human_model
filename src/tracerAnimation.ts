@@ -161,17 +161,11 @@ export class TracerAnimationController {
         const baseBorder = (mapped?.color as any)?.border || '#00e5ff';
         const baseBg = (mapped?.color as any)?.background || 'rgba(0, 229, 255, 0.1)';
 
-        if (dn.id === 'm1' && storyNodeSet.has('m1')) {
-          return {
-            id: dn.id,
-            color: { background: 'rgba(168, 85, 247, 0.35)', border: '#c084fc' },
-            font: { color: '#e9d5ff', size: 14 }
-          };
-        } else if (storyNodeSet.has(dn.id)) {
+        if (storyNodeSet.has(dn.id)) {
           return {
             id: dn.id,
             color: { background: baseBg, border: baseBorder },
-            font: { color: 'rgba(255, 255, 255, 0.85)', size: 12 }
+            font: mapped?.font || { color: 'rgba(255, 255, 255, 0.85)', size: 12 }
           };
         } else {
           return {
@@ -190,7 +184,8 @@ export class TracerAnimationController {
           id: mapped?.id || dl.id || `${dl.from}-${dl.to}-${dl.type}`,
           color: { color: 'rgba(40, 50, 65, 0.15)' },
           dashes: mapped?.dashes,
-          width: 1
+          width: 1,
+          font: { size: 0 }
         };
       })
     );
@@ -209,18 +204,6 @@ export class TracerAnimationController {
         const baseGlow = (mapped?.shadow as any)?.color || baseBorder;
 
         if (dn.id === activeNodeId) {
-          if (dn.id === 'm1') {
-            return {
-              id: dn.id,
-              color: {
-                background: '#a855f7',
-                border: '#ffffff',
-                highlight: { background: '#c084fc', border: '#ffffff' }
-              },
-              font: { color: '#ffffff', size: 17 },
-              shadow: { enabled: true, color: '#a855f7', size: 35, x: 0, y: 0 }
-            };
-          }
           return {
             id: dn.id,
             color: {
@@ -232,14 +215,6 @@ export class TracerAnimationController {
             shadow: { enabled: true, color: baseGlow, size: 32, x: 0, y: 0 }
           };
         } else if (visitedNodes.has(dn.id)) {
-          if (dn.id === 'm1') {
-            return {
-              id: dn.id,
-              color: { background: 'rgba(168, 85, 247, 0.55)', border: '#c084fc' },
-              font: { color: '#f3e8ff', size: 14 },
-              shadow: { enabled: true, color: '#a855f7', size: 20, x: 0, y: 0 }
-            };
-          }
           return {
             id: dn.id,
             color: {
@@ -276,34 +251,60 @@ export class TracerAnimationController {
       const v = this.storyNodes[i + 1];
 
       const edge =
-        this.matchedLinks.find((l) => (l.from === u && l.to === v) || (l.from === v && l.to === u)) ||
-        this.sourceLinks.find((l) => (l.from === u && l.to === v) || (l.from === v && l.to === u));
+        this.matchedLinks.find((l) => l.from === u && l.to === v) ||
+        this.matchedLinks.find((l) => l.from === v && l.to === u) ||
+        this.sourceLinks.find((l) => l.from === u && l.to === v) ||
+        this.sourceLinks.find((l) => l.from === v && l.to === u);
 
       if (edge) {
         activeTraceEdgeIds.add(edge.id || `${edge.from}-${edge.to}-${edge.type}`);
       }
     }
 
+    const currentStepEdgeId =
+      this.currentIndex > 0
+        ? String(
+            (
+              this.matchedLinks.find(
+                (l) =>
+                  (l.from === this.storyNodes[this.currentIndex - 1] && l.to === this.storyNodes[this.currentIndex]) ||
+                  (l.from === this.storyNodes[this.currentIndex] && l.to === this.storyNodes[this.currentIndex - 1])
+              ) ||
+              this.sourceLinks.find(
+                (l) =>
+                  (l.from === this.storyNodes[this.currentIndex - 1] && l.to === this.storyNodes[this.currentIndex]) ||
+                  (l.from === this.storyNodes[this.currentIndex] && l.to === this.storyNodes[this.currentIndex - 1])
+              )
+            )?.id || `${this.storyNodes[this.currentIndex - 1]}-${this.storyNodes[this.currentIndex]}`
+          )
+        : null;
+
     this.edgesDataSet.update(
       this.sourceLinks.map((dl) => {
         const mapped = this.edgeMapper ? this.edgeMapper(dl) : null;
         const edgeId = String(mapped?.id || dl.id || `${dl.from}-${dl.to}-${dl.type}`);
-        const baseColor = (mapped?.color as any)?.color || 'rgba(255, 255, 255, 0.25)';
 
         if (activeTraceEdgeIds.has(edgeId)) {
-          let traceColor = baseColor;
-          if (dl.type === 'flow') traceColor = '#ffffff';
-          else if (dl.type === 'override') traceColor = '#00e5ff';
-          else if (dl.type === 'conflict') traceColor = '#ff003c';
-          else if (dl.type === 'awareness') traceColor = '#ffffff';
+          const mappedColor = (mapped?.color as any)?.color || '#ffffff';
+          const traceColor = typeof mapped?.color === 'object' ? mappedColor : mapped?.color || '#ffffff';
+          const isCurrentEdge = currentStepEdgeId && edgeId.includes(currentStepEdgeId);
 
           return {
             id: edgeId,
             color: { color: traceColor, highlight: traceColor },
-            width: Math.max(((mapped?.width as number) || 1.5) * 2, 3),
+            width: isCurrentEdge ? Math.max(((mapped?.width as number) || 1.5) * 2.5, 4) : Math.max(((mapped?.width as number) || 1.5) * 1.5, 2.5),
             dashes: mapped?.dashes,
             arrows: mapped?.arrows || { to: { enabled: true, scaleFactor: 1.0 } },
-            shadow: { enabled: true, color: traceColor, size: 15, x: 0, y: 0 }
+            shadow: { enabled: true, color: traceColor, size: isCurrentEdge ? 20 : 10, x: 0, y: 0 },
+            font: isCurrentEdge
+              ? {
+                  color: 'rgba(0,0,0,0)',
+                  size: 11,
+                  face: 'Inter',
+                  background: 'rgba(0,0,0,0)',
+                  strokeWidth: 0
+                }
+              : { size: 0 }
           };
         } else {
           return {
@@ -311,7 +312,8 @@ export class TracerAnimationController {
             color: { color: 'rgba(40, 50, 65, 0.12)' },
             width: 1,
             dashes: mapped?.dashes,
-            shadow: false
+            shadow: false,
+            font: { size: 0 }
           };
         }
       })

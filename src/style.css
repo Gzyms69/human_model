@@ -1772,10 +1772,11 @@ div.vis-tooltip {
   }
 
   .top-tracer-player {
-    width: 90vw;
+    top: 4.25rem;
+    width: 94vw;
     flex-wrap: wrap;
     justify-content: space-between;
-    padding: 0.6rem 1rem;
+    padding: 0.5rem 0.85rem;
     border-radius: 20px;
   }
 

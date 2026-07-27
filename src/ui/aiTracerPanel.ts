@@ -422,6 +422,7 @@ export class AiTracerPanel {
     const player = document.getElementById('top-tracer-player');
     if (player) {
       player.classList.remove('hidden');
+      document.getElementById('system-log')?.classList.add('collapsed');
       createIcons({ icons });
     }
   }
@@ -568,7 +569,7 @@ export class AiTracerPanel {
       
       this.showTopPlayer();
       this.animationController.loadTrace(result.storyNodes, result.matchedLinks);
-      this.animationController.play();
+      this.animationController.stepTo(0);
     } catch (err: any) {
       this.showError(err.message || 'Wystąpił błąd podczas analizy.');
     } finally {
