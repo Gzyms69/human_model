@@ -456,7 +456,25 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     document.getElementById('node-lifehack')!.textContent = dl.lifehack;
   };
 
+  let currentRenderedBoxes: any[] = [];
+
   network.on("click", (params: any) => {
+    if (params.pointer && params.pointer.canvas && currentRenderedBoxes.length > 0) {
+      const cPos = params.pointer.canvas;
+      const clickedBox = currentRenderedBoxes.find((box: any) => {
+        const dx = cPos.x - box.x;
+        const dy = cPos.y - box.y;
+        const lx = dx * Math.cos(-box.angle) - dy * Math.sin(-box.angle);
+        const ly = dx * Math.sin(-box.angle) + dy * Math.cos(-box.angle);
+        return Math.abs(lx) <= box.width / 2 + 5 && Math.abs(ly) <= box.height / 2 + 5;
+      });
+
+      if (clickedBox) {
+        params.edges = [clickedBox.edgeId];
+        params.nodes = [];
+      }
+    }
+
     if (params.nodes.length > 0) {
       const nodeId = params.nodes[0];
 
@@ -598,7 +616,10 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
       edge.font && typeof edge.font === 'object' && edge.font.size && edge.font.size > 0 && edge.label
     );
 
-    if (activeEdges.length === 0) return;
+    if (activeEdges.length === 0) {
+      currentRenderedBoxes = [];
+      return;
+    }
 
     const pairGroups: { [key: string]: any[] } = {};
     activeEdges.forEach((edge: any) => {
@@ -608,20 +629,28 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
     });
 
     interface LabelBox {
+      edgeId: string;
+      subHeader: string;
       label: string;
       x: number;
       y: number;
       width: number;
       height: number;
+      effW: number;
+      effH: number;
+      angle: number;
       fontSize: number;
+      subFontSize: number;
       fontFace: string;
       borderColor: string;
       borderDashes: number[];
       textColor: string;
+      subTextColor: string;
       glowColor?: string;
     }
 
     const boxes: LabelBox[] = [];
+    const staggeredFractions = [0.48, 0.32, 0.62, 0.38, 0.68, 0.52, 0.28, 0.58];
 
     for (const key in pairGroups) {
       const group = pairGroups[key];
@@ -636,21 +665,23 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         const dy = toPos.y - fromPos.y;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
-        // Fractional positioning along edge vector: 0.35 or 0.65 for parallel edges
-        let fraction = 0.5;
+        const edgeGlobalIdx = activeEdges.findIndex((e: any) => e.id === edge.id);
+
+        // Inteligentny podział ułamkowy kaskady wzdłuż krawędzi
+        let fraction = staggeredFractions[(edgeGlobalIdx >= 0 ? edgeGlobalIdx : groupIdx) % staggeredFractions.length];
         if (groupCount > 1) {
-          fraction = groupIdx === 0 ? 0.35 : 0.65;
+          fraction = 0.32 + (groupIdx / Math.max(1, groupCount - 1)) * 0.36;
           if (edge.from > edge.to) {
             fraction = 1 - fraction;
           }
         }
 
-        // CurvedCW offset (roundness 0.08 for tight curve hugging)
+        // CurvedCW offset (roundness 0.08 dla przylegania do łuku)
         const roundness = 0.08;
         const curveOffsetX = roundness * dy;
         const curveOffsetY = -roundness * dx;
 
-        // Normal unit vector for tight line hugging
+        // Normal unit vector dla przylegania do linii
         const outerNx = dy / len;
         const outerNy = -dx / len;
         const tightNormalOffset = 8;
@@ -658,8 +689,8 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         let x = fromPos.x + dx * fraction + curveOffsetX + outerNx * tightNormalOffset;
         let y = fromPos.y + dy * fraction + curveOffsetY + outerNy * tightNormalOffset;
 
-        // Node Exclusion Zone: Keep labels at least 48px away from node centers
-        const minNodeDist = 48;
+        // Node Exclusion Zone: co najmniej 54px od środka węzłów
+        const minNodeDist = 54;
         const dFrom = Math.sqrt((x - fromPos.x) ** 2 + (y - fromPos.y) ** 2);
         if (dFrom < minNodeDist && dFrom > 0) {
           x = fromPos.x + ((x - fromPos.x) / dFrom) * minNodeDist;
@@ -671,64 +702,94 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
           y = toPos.y + ((y - toPos.y) / dTo) * minNodeDist;
         }
 
-        const fontSize = edge.font.size || 11;
-        const fontFace = edge.font.face || 'Inter';
+        // Całkowicie poziome etykiety (0 stopni) dla 100% czytelności
+        const angle = 0;
 
-        ctx.save();
-        ctx.font = `${fontSize}px ${fontFace}`;
-        const metrics = ctx.measureText(edge.label);
-        ctx.restore();
-
-        const padX = 9;
-        const padY = 5;
-        const width = metrics.width + padX * 2;
-        const height = fontSize + padY * 2;
-
+        let subHeader = '';
         let borderColor = 'rgba(255, 255, 255, 0.35)';
         let borderDashes: number[] = [];
         let textColor = '#f8fafc';
+        let subTextColor = 'rgba(255, 255, 255, 0.55)';
         let glowColor: string | undefined = undefined;
 
         const dl = sourceLinks.find(src => (src.id || `${src.from}-${src.to}-${src.type}`) === edge.id);
         if (dl) {
+          const fromNode = sourceNodes.find(n => n.id === dl.from);
+          const toNode = sourceNodes.find(n => n.id === dl.to);
+          if (fromNode && toNode) {
+            const arrowSymbol = dl.direction === 'both' ? '⇄' : '➔';
+            subHeader = `${fromNode.title} ${arrowSymbol} ${toNode.title}`;
+          }
+
           if (dl.type === 'override') {
             borderColor = '#00e5ff';
             textColor = '#80f2ff';
-            glowColor = 'rgba(0, 229, 255, 0.5)';
+            subTextColor = '#00e5ff';
+            glowColor = 'rgba(0, 229, 255, 0.4)';
           } else if (dl.type === 'conflict') {
             borderColor = '#ff003c';
             borderDashes = [4, 3];
             textColor = '#ff6685';
-            glowColor = 'rgba(255, 0, 60, 0.5)';
+            subTextColor = '#ff003c';
+            glowColor = 'rgba(255, 0, 60, 0.4)';
           } else if (dl.type === 'awareness') {
             borderColor = 'rgba(255, 255, 255, 0.7)';
             borderDashes = [4, 3];
             textColor = '#ffffff';
+            subTextColor = 'rgba(255, 255, 255, 0.75)';
           } else if (dl.type === 'flow') {
             borderColor = 'rgba(255, 255, 255, 0.35)';
             textColor = '#f8fafc';
+            subTextColor = 'rgba(255, 255, 255, 0.55)';
           }
         }
 
+        const subFontSize = 9;
+        const fontSize = edge.font.size || 11;
+        const fontFace = edge.font.face || 'Inter';
+
+        ctx.save();
+        ctx.font = `500 ${subFontSize}px ${fontFace}`;
+        const subMetrics = ctx.measureText(subHeader);
+        ctx.font = `600 ${fontSize}px ${fontFace}`;
+        const mainMetrics = ctx.measureText(edge.label);
+        ctx.restore();
+
+        const padX = 10;
+        const padY = 6;
+        const textSpacing = 3;
+        const width = Math.max(subMetrics.width, mainMetrics.width) + padX * 2;
+        const height = subFontSize + fontSize + textSpacing + padY * 2;
+
+        const effW = width;
+        const effH = height;
+
         boxes.push({
+          edgeId: edge.id,
+          subHeader,
           label: edge.label,
           x,
           y,
           width,
           height,
+          effW,
+          effH,
+          angle,
           fontSize,
+          subFontSize,
           fontFace,
           borderColor,
           borderDashes,
           textColor,
+          subTextColor,
           glowColor
         });
       });
     }
 
-    // 2D AABB Relaxation Pass for non-overlapping pill badges
-    const iterations = 12;
-    const paddingMargin = 6;
+    // 2D AABB Relaxation Pass dla niezasłaniających się poziomych etykiet
+    const iterations = 16;
+    const paddingMargin = 8;
 
     for (let iter = 0; iter < iterations; iter++) {
       for (let i = 0; i < boxes.length; i++) {
@@ -739,8 +800,8 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
           const dx = b2.x - b1.x;
           const dy = b2.y - b1.y;
 
-          const minDx = (b1.width + b2.width) / 2 + paddingMargin;
-          const minDy = (b1.height + b2.height) / 2 + paddingMargin;
+          const minDx = (b1.effW + b2.effW) / 2 + paddingMargin;
+          const minDy = (b1.effH + b2.effH) / 2 + paddingMargin;
 
           const overlapX = minDx - Math.abs(dx);
           const overlapY = minDy - Math.abs(dy);
@@ -762,13 +823,16 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
 
     boxes.forEach(box => {
       ctx.save();
-      ctx.font = `${box.fontSize}px ${box.fontFace}`;
+      ctx.translate(box.x, box.y);
+
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      const rx = box.x - box.width / 2;
-      const ry = box.y - box.height / 2;
-      const r = 6;
+      const rx = -box.width / 2;
+      const ry = -box.height / 2;
+      const r = 8;
+      const padY = 6;
+      const textSpacing = 3;
 
       ctx.beginPath();
       if (ctx.roundRect) {
@@ -794,14 +858,27 @@ function renderNetwork(mode: 'MIKRO' | 'MAKRO') {
         ctx.shadowBlur = 8;
       }
 
+      // Górny wiersz: Podnagłówek (Źródło ➔ Cel)
+      const topY = ry + padY + box.subFontSize / 2;
+      if (box.subHeader) {
+        ctx.font = `500 ${box.subFontSize}px ${box.fontFace}`;
+        ctx.fillStyle = box.subTextColor;
+        ctx.fillText(box.subHeader, 0, topY);
+      }
+
+      // Dolny wiersz: Główny opis relacji
+      const bottomY = topY + box.subFontSize / 2 + textSpacing + box.fontSize / 2;
+      ctx.font = `600 ${box.fontSize}px ${box.fontFace}`;
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#0f1218';
-      ctx.strokeText(box.label, box.x, box.y);
+      ctx.strokeText(box.label, 0, bottomY);
       ctx.fillStyle = box.textColor;
-      ctx.fillText(box.label, box.x, box.y);
+      ctx.fillText(box.label, 0, bottomY);
 
       ctx.restore();
     });
+
+    currentRenderedBoxes = boxes;
   });
 
   if (mode === 'MAKRO' && !isMobile) {
@@ -824,12 +901,15 @@ document.getElementById('details-bar')!.addEventListener('click', () => {
   createIcons({ icons });
 });
 
-document.getElementById('close-panel')!.addEventListener('click', () => {
+const hideSidePanel = () => {
   document.getElementById('side-panel')!.classList.add('hidden');
   if (document.getElementById('node-title')!.textContent !== "") {
     document.getElementById('details-bar')!.classList.remove('hidden');
   }
-});
+};
+
+document.getElementById('close-panel')?.addEventListener('click', hideSidePanel);
+document.getElementById('close-panel-left')?.addEventListener('click', hideSidePanel);
 
 document.querySelector('[data-tab="mikro"]')!.addEventListener('click', (e) => {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
