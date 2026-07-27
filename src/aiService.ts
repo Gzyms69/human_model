@@ -36,6 +36,9 @@ export interface StreamCallbacks {
   onLog?: (msg: string, type?: 'info' | 'warn' | 'error' | 'success') => void;
   onToken?: (chunk: string) => void;
   onReasoning?: (thought: string) => void;
+  onRawSseChunk?: (rawSse: string) => void;
+  onRequestPayload?: (payload: object) => void;
+  onProviderInfo?: (info: { provider?: string; model?: string; ttftMs?: number }) => void;
   onMetrics?: (metrics: { promptTokens: number; completionTokens: number; speedTokSec: number; durationMs: number }) => void;
 }
 
@@ -212,40 +215,78 @@ export async function analyzeSituation(
   const systemPrompt = `Jesteś światowej klasy analitykiem behawioralnym i twórcą systemu "Human Model".
 Twoim zadaniem jest dokładna dekompozycja sytuacji z życia użytkownika na ciągły, nieprzerwany przepływ przyczynowo-skutkowy po grafie systemowym.
 
+BEZWZGLĘDNE ZASADY JĘZYKOWE I JAKOŚCIOWE (KRYTYCZNE):
+1. **100% JĘZYK POLSKI**: Wszystkie polska tekstu w wygenerowanym obiekcie JSON MUSZĄ być bezwzględnie w języku polskim. Absolutny zakaz używania języka angielskiego w polach transitionText, whyItHappened, summary, rootCause itp. (Zabronione angielskie frazy takie jak: "Metabolic depletion", "Somatic tension", "Emotions fuel", "Overwhelming thoughts", "Loss of observer", "Impulse overwhelms", "Depleted willpower").
+2. **GŁĘBOKOŚĆ NAUKOWA I BRAK LENISTWA**: Pole "whyItHappened" w KAŻDYM kroku MUSI zawierać MINIMUM 2 PEŁNE ZDANIA wyczerpującego uzasadnienia z użyciem pojęć z neurobiologii, psychologii i biologii (np. kora przedczołowa/PFC, ciało migdałowate, DMN, deplecja glukozy, adenozyna, kortyzol, dopamina, osie HPA, defuzja poznawcza, układ limbiczny).
+3. **Przepływ po Grafie**: Sytuacja to ciągła reakcja łańcuchowa po istniejących krawędziach grafu.
+4. **Obowiązek Jaźni / Obserwatora (m1)**: W KAŻDEJ analizie MUSISZ uwzględnić węzeł 'm1' (Jaźń / Obserwator). Wyjaśnij mechanicznie, czy Jaźń zadziałała, czy uległa fuzji/przytłoczeniu przez automat.
+
 Dostępne Węzły Systemowe wraz z ich wiedzą naukową, psychologiczną i filozoficzną:
 ${nodesContext}
 
 Istniejące Połączenia w Grafie:
 ${linksContext}
 ${formattedAnswersContext}
-KRYTYCZNE ZASADY ANALIZY SYSTEMOWEJ:
-1. **Dostępność i Przepływ**: Sytuacja to ciągła reakcja łańcuchowa po istniejących krawędziach grafu.
-2. **BEZWZGLĘDNY OBOWIĄZEK JAŹNI / OBSERWATORA (m1)**: W KAŻDEJ analizie MUSISZ uwzględnić węzeł 'm1' (Jaźń / Obserwator). Wyjaśnij czy Jaźń/Obserwator zadziałała, czy też została wyparta przez automat.
-3. **Głębokie Uzasadnienie (whyItHappened)**: Wykorzystaj przekazaną wiedzę naukową, psychologiczną i filozoficzną przypisaną do danego węzła i relacji. Wyjaśnij mechanicznie dlaczego ten węzeł aktywował się w tej sytuacji. Nie dawaj tu lifehacków.
-4. **Lifehack (operationalLifehack)**: Wykorzystaj dedykowane lifehacki przypisane do aktywnych węzłów.
-
-Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
+PRZYKŁADOWA WZORCOWA STRUKTURA I POZIOM SZCZEGÓŁOWOŚCI (FEW-SHOT):
 {
-  "summary": "Krótkie 2-3 zdaniowe podsumowanie mechaniki całej sytuacji, odwołujące się do naukowej podszewki zdarzenia.",
+  "summary": "Długotrwałe wyczerpanie metaboliczne i brak snu doprowadziły do spadku energii w kórze czołowej. Osłabiona samokontrola sprawiła, że aktywowane w ciele napięcie i narastający gniew przejęły sterowanie zachowaniem, co doprowadziło do impulsywnej decyzji o zerwaniu.",
   "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
   "edgeExplanations": [
-    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przeniesienia impetu z uwzględnieniem typu relacji." }
+    {
+      "fromNodeId": "m11",
+      "toNodeId": "m7",
+      "transitionText": "Wyczerpanie metaboliczne obniża poziom glukozy, wywołując somatyczne sygnały stresu w ciele."
+    },
+    {
+      "fromNodeId": "m7",
+      "toNodeId": "m4",
+      "transitionText": "Napięcie w ciele aktywuje silny negatywny afekt i narastające emocje."
+    },
+    {
+      "fromNodeId": "m4",
+      "toNodeId": "m3",
+      "transitionText": "Silne emocje zasilają katastroficzne myśli i fuzję poznawczą."
+    },
+    {
+      "fromNodeId": "m3",
+      "toNodeId": "m1",
+      "transitionText": "Przytłaczające myśli osłabiają metakognitywną perspektywę Obserwatora."
+    },
+    {
+      "fromNodeId": "m1",
+      "toNodeId": "m5",
+      "transitionText": "Utrata dystansu Obserwatora pozwala na dominację impulsywnych pragnień."
+    },
+    {
+      "fromNodeId": "m5",
+      "toNodeId": "m2",
+      "transitionText": "Gwałtowny impuls przełamuje kontrolę wykonawczą i osłabia samokontrolę."
+    },
+    {
+      "fromNodeId": "m2",
+      "toNodeId": "m6",
+      "transitionText": "Wyczerpana wola prowadzi bezpośrednio do reaktywnego działania w relacji."
+    }
   ],
   "steps": [
     {
       "step": 1,
       "nodeId": "m11",
       "title": "Biochemia / Stan Metaboliczny",
-      "trigger": "8h pracy",
-      "whatHappened": "Wyczerpanie glukozy",
-      "whyItHappened": "Kora czołowa utraciła paliwo metaboliczne do hamowania impulsów."
+      "trigger": "8h intensywnej pracy bez przerwy",
+      "whatHappened": "Spadek glukozy i akumulacja adenozyny w mózgu",
+      "whyItHappened": "Kora przedczołowa utraciła kluczowe paliwo metaboliczne niezbędne do aktywnego hamowania impulsów i regulowania afektu. Spadek poziomu ATP obniża próg aktywacji układu współczulnego."
     }
   ],
-  "observerRoleSummary": "Kluczowy podsumowujący opis roli Jaźni (m1) w tej sytuacji.",
-  "rootCause": "Mechaniczna przyczyna źródłowa zdarzenia na poziomie systemowym.",
-  "operationalLifehack": "Wskazówka operacyjna (Stoper) zapobiegająca powtórzeniu w przyszłości."
+  "observerRoleSummary": "Jaźń (m1) uległa fuzji z przepływem emocjonalnym z powodu metabolicznego przeciążenia kory przedczołowej.",
+  "rootCause": "Mechaniczna przyczyna źródłowa: wyczerpanie zasobów metabolicznych kory czołowej osłabiło hamowanie limbiczne, uwalniając reaktywny impuls.",
+  "operationalLifehack": "Wprowadź 5-sekundową fizyczną pauzę (Gap Practice) oraz uzupełnij nawodnienie i glukozę przed podjęciem wiążącej decyzji."
 }
+
+Wymogi odnośnie odpowiedzi: Wyłącznie czysty, surowy obiekt JSON zgodny z powyższym wzorcem i zasadami 100% języka polskiego.
 `;
+
+  const reasoningEffort = localStorage.getItem('human_model_reasoning_effort') || 'medium';
 
   const candidateModels = [
     requestedModel,
@@ -258,11 +299,27 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 
   for (const targetModel of candidateModels) {
     try {
-      callbacks?.onLog?.(`Łączenie ze strumieniem OpenRouter SSE (Model: ${targetModel})...`, 'info');
+      const payloadObject = {
+        model: targetModel,
+        models: candidateModels,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Oto sytuacja do dekompozycji: "${userStory}"` }
+        ],
+        temperature: 0.2,
+        stream: true,
+        include_reasoning: true,
+        reasoning: { effort: reasoningEffort },
+        stream_options: { include_usage: true }
+      };
+
+      callbacks?.onRequestPayload?.(payloadObject);
+      callbacks?.onLog?.(`Łączenie ze strumieniem OpenRouter SSE (Model: ${targetModel}, Reasoning Effort: ${reasoningEffort})...`, 'info');
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000);
 
+      const fetchStartTime = Date.now();
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -271,16 +328,7 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
           'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://humanmodel.app',
           'X-Title': 'Human Model AI Tracer'
         },
-        body: JSON.stringify({
-          model: targetModel,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Oto sytuacja do dekompozycji: "${userStory}"` }
-          ],
-          temperature: 0.2,
-          stream: true,
-          stream_options: { include_usage: true }
-        }),
+        body: JSON.stringify(payloadObject),
         signal: controller.signal
       });
 
@@ -313,24 +361,38 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
       let completionTokens = 0;
       const startTime = Date.now();
       let firstTokenTime = 0;
+      let providerDetected = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        const decodedChunk = decoder.decode(value, { stream: true });
+        buffer += decodedChunk;
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed || trimmed.startsWith(':')) continue;
+
+          callbacks?.onRawSseChunk?.(trimmed);
+
           if (trimmed === 'data: [DONE]') continue;
 
           if (trimmed.startsWith('data: ')) {
             try {
               const jsonStr = trimmed.slice(6);
               const parsed = JSON.parse(jsonStr);
+
+              if (!providerDetected && (parsed.provider || parsed.model)) {
+                providerDetected = true;
+                callbacks?.onProviderInfo?.({
+                  provider: parsed.provider || 'OpenRouter Auto Provider',
+                  model: parsed.model || targetModel,
+                  ttftMs: firstTokenTime ? firstTokenTime - fetchStartTime : Date.now() - fetchStartTime
+                });
+              }
 
               if (parsed.usage) {
                 if (parsed.usage.prompt_tokens) promptTokens = parsed.usage.prompt_tokens;
@@ -339,14 +401,21 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 
               const delta = parsed.choices?.[0]?.delta;
               if (delta) {
+                if (!firstTokenTime) {
+                  firstTokenTime = Date.now();
+                  callbacks?.onProviderInfo?.({
+                    provider: parsed.provider || 'OpenRouter Auto Provider',
+                    model: parsed.model || targetModel,
+                    ttftMs: firstTokenTime - fetchStartTime
+                  });
+                }
+
                 if (delta.reasoning) {
                   rawReasoning += delta.reasoning;
                   callbacks?.onReasoning?.(delta.reasoning);
                 }
 
                 if (delta.content) {
-                  if (!firstTokenTime) firstTokenTime = Date.now();
-
                   let contentChunk = delta.content;
 
                   if (contentChunk.includes('<think>')) {
@@ -417,7 +486,7 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
 
       result.steps = patchStepsToCoverExpandedNodes(result.steps || [], result.storyNodes);
 
-      return result;
+      return sanitizeAnalysisResult(result);
     } catch (err: any) {
       callbacks?.onLog?.(`Błąd podczas wywołania modelu ${targetModel}: ${err.message}`, 'warn');
       lastErrorMsg = err.message || 'Błąd połączenia ze strumieniem SSE';
@@ -425,6 +494,37 @@ Wymogi odnośnie odpowiedzi (Wyłącznie surowy JSON):
   }
 
   throw new Error(`Wszystkie próby połączenia nie powiodły się. Ostatni błąd: ${lastErrorMsg}`);
+}
+
+function sanitizeAnalysisResult(result: SituationAnalysisResult): SituationAnalysisResult {
+  if (!result) return result;
+
+  if (Array.isArray(result.edgeExplanations)) {
+    result.edgeExplanations = result.edgeExplanations.map((edge) => {
+      let text = edge.transitionText || '';
+      const isEnglish = (
+        /\b(Metabolic depletion|reduces glucose|Somatic tension|activates|Emotions fuel|Overwhelming thoughts|Loss of observer|Impulse overwhelms|Depleted willpower|relational action|impulsive|observer's|executive control|somatic stress)\b/i.test(text)
+      );
+
+      if (isEnglish) {
+        const linkDef = MIKRO_LINKS.find((l) => l.from === edge.fromNodeId && l.to === edge.toNodeId);
+        if (linkDef) {
+          text = linkDef.label ? `${linkDef.label}: ${linkDef.description}` : linkDef.description;
+        } else {
+          const fromNode = MIKRO_NODES.find((n) => n.id === edge.fromNodeId);
+          const toNode = MIKRO_NODES.find((n) => n.id === edge.toNodeId);
+          text = `Przeniesienie sygnału z ${fromNode?.title || edge.fromNodeId} do ${toNode?.title || edge.toNodeId}.`;
+        }
+      }
+
+      return {
+        ...edge,
+        transitionText: text
+      };
+    });
+  }
+
+  return result;
 }
 
 function patchStepsToCoverExpandedNodes(rawSteps: TraceStep[], expandedNodes: string[]): TraceStep[] {
@@ -471,7 +571,9 @@ async function analyzeWithGoogleDirect(
 
   callbacks?.onLog?.(`Wysyłanie bezpośredniego zapytania do Google AI Studio REST API...`, 'info');
 
-  const prompt = `Jesteś analitykiem behawioralnym w projekcie Human Model.
+  const prompt = `Jesteś światowej klasy analitykiem behawioralnym w projekcie Human Model.
+Wszystkie opisy, podsumowania i relacje w wygenerowanym obiekcie JSON MUSZĄ być w 100% w języku polskim. Absolutny zakaz używania języka angielskiego!
+
 Węzły z pełnymi opisami naukowo-psychologicznymi:
 ${nodesContext}
 
@@ -482,25 +584,25 @@ Wywiad: ${formattedAnswers}
 
 Zwróć TYLKO czysty wygenerowany JSON:
 {
-  "summary": "Podsumowanie ze wskaźnikami naukowymi",
+  "summary": "Naukowe 2-3 zdaniowe podsumowanie mechaniki całej sytuacji po polsku",
   "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"],
   "edgeExplanations": [
-    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przejścia" }
+    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Opis przeniesienia sygnału po polsku" }
   ],
   "steps": [
     {
       "step": 1,
       "nodeId": "m11",
-      "title": "Biochemia",
+      "title": "Biochemia / Stan Metaboliczny",
       "trigger": "Wyzwalacz",
       "whatHappened": "Co się stało",
-      "whyItHappened": "Dlaczego mechanicznie (nauka/psychologia)",
+      "whyItHappened": "Minimum 2 pełne zdania naukowego uzasadnienia z neurobiologii/psychologii po polsku",
       "isSelfObserver": false
     }
   ],
-  "observerRoleSummary": "Opis roli Jaźni",
-  "rootCause": "Przyczyna źródłowa",
-  "operationalLifehack": "Wskazówka"
+  "observerRoleSummary": "Opis roli Jaźni po polsku",
+  "rootCause": "Przyczyna źródłowa po polsku",
+  "operationalLifehack": "Wskazówka (Stoper) po polsku"
 }
 
 Sytuacja: "${userStory}"`;
@@ -539,5 +641,5 @@ Sytuacja: "${userStory}"`;
   result.steps = patchStepsToCoverExpandedNodes(result.steps || [], result.storyNodes);
   result.usedModel = 'Google AI Studio (Gemini 1.5 Flash)';
 
-  return result;
+  return sanitizeAnalysisResult(result);
 }

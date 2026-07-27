@@ -26,6 +26,7 @@ export class AiTracerPanel {
 
     const savedKey = localStorage.getItem('human_model_openrouter_key') || '';
     const savedModel = localStorage.getItem('human_model_openrouter_model') || 'google/gemma-4-31b-it:free';
+    const savedReasoning = localStorage.getItem('human_model_reasoning_effort') || 'medium';
 
     panel.innerHTML = `
       <div id="ai-panel-resizer" class="ai-panel-resizer" title="Przeciągnij, aby zmienić wysokość"></div>
@@ -65,6 +66,15 @@ export class AiTracerPanel {
             <option value="nvidia/nemotron-3-super-120b-a12b:free" ${savedModel === 'nvidia/nemotron-3-super-120b-a12b:free' ? 'selected' : ''}>NVIDIA Nemotron 3 Super 120B (Free)</option>
             <option value="nvidia/nemotron-3-ultra-550b-a55b:free" ${savedModel === 'nvidia/nemotron-3-ultra-550b-a55b:free' ? 'selected' : ''}>NVIDIA Nemotron 3 Ultra 550B (Free - 1M Kontekst)</option>
             <option value="openai/gpt-oss-20b:free" ${savedModel === 'openai/gpt-oss-20b:free' ? 'selected' : ''}>OpenAI GPT OSS 20B (Free)</option>
+          </select>
+        </label>
+        <label>
+          Poziom Myślenia (Reasoning Effort):
+          <select id="select-openrouter-reasoning" class="model-select">
+            <option value="auto" ${savedReasoning === 'auto' ? 'selected' : ''}>Auto (Domyślny)</option>
+            <option value="low" ${savedReasoning === 'low' ? 'selected' : ''}>Niski (Szybka odpowiedź)</option>
+            <option value="medium" ${savedReasoning === 'medium' ? 'selected' : ''}>Średni (Zbalansowany)</option>
+            <option value="high" ${savedReasoning === 'high' ? 'selected' : ''}>Wysoki (Głęboka analiza)</option>
           </select>
         </label>
         <div class="settings-actions">
@@ -229,13 +239,18 @@ export class AiTracerPanel {
 
             <div class="terminal-tabs">
               <button class="term-tab active" data-tab="tab-thoughts">Myśli AI (Reasoning)</button>
-              <button class="term-tab" data-tab="tab-raw">Strumień Surowy</button>
+              <button class="term-tab" data-tab="tab-raw">Surowy SSE</button>
+              <button class="term-tab" data-tab="tab-payload">Zapytanie & Dostawca</button>
               <button class="term-tab" data-tab="tab-logs">Konsola Logów</button>
             </div>
 
             <div class="terminal-content">
               <pre id="terminal-thoughts-view" class="term-view active">Oczekiwanie na generowanie myśli modelu...</pre>
-              <pre id="terminal-raw-view" class="term-view hidden">Oczekiwanie na tokeny JSON...</pre>
+              <pre id="terminal-raw-view" class="term-view hidden">Oczekiwanie na surowe ramki sieciowe SSE (data: {...})...</pre>
+              <div id="terminal-payload-view" class="term-view hidden">
+                <div id="payload-provider-badge" class="payload-provider-badge">Dostawca: Oczekiwanie na połączenie... | TTFT: - ms</div>
+                <pre id="terminal-payload-json">Oczekiwanie na wysłanie ładunku HTTP POST do OpenRouter API...</pre>
+              </div>
               <pre id="terminal-logs-view" class="term-view hidden">Inicjalizacja zapytań systemowych...</pre>
             </div>
           </div>
@@ -262,9 +277,11 @@ export class AiTracerPanel {
     this.container.querySelector('#btn-save-settings')?.addEventListener('click', () => {
       const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
       const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
+      const reasoningSelect = this.container.querySelector('#select-openrouter-reasoning') as HTMLSelectElement;
       
       if (keyInput) localStorage.setItem('human_model_openrouter_key', keyInput.value.trim());
       if (modelSelect) localStorage.setItem('human_model_openrouter_model', modelSelect.value.trim());
+      if (reasoningSelect) localStorage.setItem('human_model_reasoning_effort', reasoningSelect.value.trim());
       
       this.container.querySelector('#ai-settings-drawer')?.classList.add('hidden');
       this.updateAuthState();
@@ -437,13 +454,17 @@ export class AiTracerPanel {
   private resetTerminalViews() {
     const thoughts = this.container.querySelector('#terminal-thoughts-view');
     const raw = this.container.querySelector('#terminal-raw-view');
+    const payloadJson = this.container.querySelector('#terminal-payload-json');
+    const providerBadge = this.container.querySelector('#payload-provider-badge');
     const logs = this.container.querySelector('#terminal-logs-view');
     const promptTok = this.container.querySelector('#metric-prompt-tok');
     const genTok = this.container.querySelector('#metric-gen-tok');
     const speed = this.container.querySelector('#metric-speed');
 
     if (thoughts) thoughts.textContent = 'Oczekiwanie na generowanie myśli modelu...';
-    if (raw) raw.textContent = 'Oczekiwanie na tokeny JSON...';
+    if (raw) raw.textContent = 'Oczekiwanie na surowe ramki sieciowe SSE (data: {...})...\n';
+    if (payloadJson) payloadJson.textContent = 'Oczekiwanie na wysłanie ładunku HTTP POST do OpenRouter API...';
+    if (providerBadge) providerBadge.textContent = 'Dostawca: Oczekiwanie na połączenie... | TTFT: - ms';
     if (logs) logs.textContent = '';
     if (promptTok) promptTok.textContent = 'Prompt: 0 tok';
     if (genTok) genTok.textContent = 'Gen: 0 tok';
@@ -469,14 +490,27 @@ export class AiTracerPanel {
         thoughtsView.textContent += thought;
         thoughtsView.scrollTop = thoughtsView.scrollHeight;
       },
-      onToken: (chunk) => {
+      onRawSseChunk: (chunk) => {
         const rawView = this.container.querySelector('#terminal-raw-view');
         if (!rawView) return;
-        if (rawView.textContent === 'Oczekiwanie na tokeny JSON...') {
+        if (rawView.textContent?.startsWith('Oczekiwanie na surowe ramki')) {
           rawView.textContent = '';
         }
-        rawView.textContent += chunk;
+        rawView.textContent += chunk + '\n';
         rawView.scrollTop = rawView.scrollHeight;
+      },
+      onRequestPayload: (payload) => {
+        const payloadJson = this.container.querySelector('#terminal-payload-json');
+        if (!payloadJson) return;
+        payloadJson.textContent = JSON.stringify(payload, null, 2);
+      },
+      onProviderInfo: (info) => {
+        const providerBadge = this.container.querySelector('#payload-provider-badge');
+        if (!providerBadge) return;
+        const prov = info.provider || 'OpenRouter Router';
+        const model = info.model || 'Domyślny';
+        const ttft = info.ttftMs ? `${info.ttftMs} ms` : 'b/d';
+        providerBadge.textContent = `Dostawca Infrastruktury: ${prov} | Model Wykonawczy: ${model} | TTFT: ${ttft}`;
       },
       onMetrics: (metrics) => {
         const promptEl = this.container.querySelector('#metric-prompt-tok');

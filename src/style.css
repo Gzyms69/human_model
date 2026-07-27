@@ -2100,7 +2100,31 @@ div.vis-tooltip {
 }
 
 #terminal-raw-view {
-  color: #93c5fd;
+  color: #60a5fa;
+  font-size: 0.67rem;
+}
+
+#terminal-payload-view {
+  color: #34d399;
+}
+
+.payload-provider-badge {
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  color: #34d399;
+  padding: 0.35rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.66rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+#terminal-payload-json {
+  color: #a7f3d0;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.67rem;
 }
 
 #terminal-logs-view {
