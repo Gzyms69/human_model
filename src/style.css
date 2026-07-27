@@ -2131,6 +2131,216 @@ div.vis-tooltip {
   color: #cbd5e1;
 }
 
+/* ==========================================================================
+   LIVE STAGE STEPPER & IDENTIFIED PATH PREVIEW STYLES
+   ========================================================================== */
+.ai-stage-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stage-step {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #64748b;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.stage-step .step-num-badge {
+  background: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.stage-step.active {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+}
+
+.stage-step.active .step-num-badge {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+.stage-step.done {
+  color: #34d399;
+}
+
+.stage-step.done .step-num-badge {
+  background: #34d399;
+  color: #0f172a;
+}
+
+.stage-step-arrow {
+  color: #475569;
+  font-size: 0.7rem;
+}
+
+/* IDENTIFIED PATH PREVIEW CARD (STAGE 1 DONE) */
+.identified-path-card {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: fadeInPath 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInPath {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.path-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.path-card-header h3 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.path-ready-badge {
+  font-size: 0.65rem;
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.identified-path-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.identified-node-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: #f1f5f9;
+}
+
+.identified-node-chip .chip-idx {
+  color: #38bdf8;
+  font-weight: 700;
+  font-size: 0.65rem;
+}
+
+.path-arrow {
+  color: #64748b;
+  font-size: 0.7rem;
+}
+
+/* SKELETON LOADERS FOR TIMELINE */
+.skeleton-step-card {
+  opacity: 0.6;
+  border-style: dashed !important;
+}
+
+.skeleton-line {
+  height: 8px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.15), rgba(255,255,255,0.05));
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite;
+  border-radius: 4px;
+  margin-top: 0.4rem;
+}
+
+.skeleton-line.short { width: 40%; }
+.skeleton-line.medium { width: 70%; }
+.skeleton-line.long { width: 95%; }
+
+@keyframes skeletonShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.step-unfold-anim {
+  animation: unfoldStep 0.4s ease-out forwards;
+}
+
+@keyframes unfoldStep {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* TERMINAL STAGE FILTERS */
+.terminal-stage-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  background: #0b0f17;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.filter-label {
+  font-size: 0.62rem;
+  color: #64748b;
+  margin-right: 0.2rem;
+}
+
+.stage-filter-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  font-size: 0.62rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stage-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f1f5f9;
+}
+
+.stage-filter-btn.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: #38bdf8;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+
 
 
 

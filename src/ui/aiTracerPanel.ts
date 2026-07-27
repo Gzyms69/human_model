@@ -9,6 +9,13 @@ export class AiTracerPanel {
   private animationController: TracerAnimationController;
   private lastAnalysisResult: SituationAnalysisResult | null = null;
 
+  // RAF Throttling Buffers for 60 FPS Terminal Performance
+  private pendingLogs: { time: string; prefix: string; msg: string; stage?: number }[] = [];
+  private pendingThoughts: string[] = [];
+  private pendingRawChunks: string[] = [];
+  private rafScheduled: boolean = false;
+  private currentTerminalStageFilter: number = 0; // 0 = all, 1, 2, 3
+
   constructor(animationController: TracerAnimationController) {
     this.animationController = animationController;
     this.container = this.createPanelElement();
@@ -69,12 +76,11 @@ export class AiTracerPanel {
           </select>
         </label>
         <label>
-          Poziom Myślenia (Reasoning Effort):
+          Poziom Myślenia AI (Reasoning Effort):
           <select id="select-openrouter-reasoning" class="model-select">
-            <option value="auto" ${savedReasoning === 'auto' ? 'selected' : ''}>Auto (Domyślny)</option>
-            <option value="low" ${savedReasoning === 'low' ? 'selected' : ''}>Niski (Szybka odpowiedź)</option>
+            <option value="low" ${savedReasoning === 'low' ? 'selected' : ''}>Niski (Szybka analiza)</option>
             <option value="medium" ${savedReasoning === 'medium' ? 'selected' : ''}>Średni (Zbalansowany)</option>
-            <option value="high" ${savedReasoning === 'high' ? 'selected' : ''}>Wysoki (Głęboka analiza)</option>
+            <option value="high" ${savedReasoning === 'high' ? 'selected' : ''}>Wysoki (Maksymalnie głęboki ślad)</option>
           </select>
         </label>
         <div class="settings-actions">
@@ -152,9 +158,27 @@ export class AiTracerPanel {
           </div>
         </div>
 
+        <!-- LIVE STAGE PROGRESS STEPPER BAR -->
         <div id="ai-loading" class="ai-loading-state hidden">
+          <div class="ai-stage-progress">
+            <div class="stage-step" data-stage="1">
+              <span class="step-num-badge">1</span>
+              <span>Ścieżka Węzłów</span>
+            </div>
+            <div class="stage-step-arrow">➔</div>
+            <div class="stage-step" data-stage="2">
+              <span class="step-num-badge">2</span>
+              <span>Dekompozycja 3D</span>
+            </div>
+            <div class="stage-step-arrow">➔</div>
+            <div class="stage-step" data-stage="3">
+              <span class="step-num-badge">3</span>
+              <span>Synteza & Stoper</span>
+            </div>
+          </div>
+
           <div class="ai-spinner"></div>
-          <p id="ai-loading-text">Generuję głęboką sekwencję przepływu na grafie...</p>
+          <p id="ai-loading-text">Inicjalizacja 3-etapowego pipeline'u analizy...</p>
         </div>
 
         <div id="ai-error-box" class="ai-error-box hidden">
@@ -180,8 +204,17 @@ export class AiTracerPanel {
             </div>
           </div>
 
+          <!-- IDENTIFIED PATH LIVE CARD (STAGE 1 DONE) -->
+          <div id="identified-path-card" class="identified-path-card hidden">
+            <div class="path-card-header">
+              <h3><i data-lucide="git-commit"></i> Zidentyfikowana Ścieżka Przyczynowo-Skutkowa</h3>
+              <span class="path-ready-badge">Wyznaczono w Etapie 1 ✓</span>
+            </div>
+            <div id="identified-path-chips" class="identified-path-chips"></div>
+          </div>
+
           <!-- DYNAMIC SYNTHESIS CARD -->
-          <div class="result-summary-card">
+          <div id="result-summary-card" class="result-summary-card hidden">
             <div class="card-header-flex">
               <h3 id="synthesis-header-title"><i data-lucide="activity"></i> Synteza Mechaniki</h3>
               <span id="result-model-badge" class="model-used-badge"></span>
@@ -202,7 +235,7 @@ export class AiTracerPanel {
             <div id="timeline-steps-list" class="timeline-steps-list"></div>
           </div>
 
-          <div class="lifehack-result-card">
+          <div id="lifehack-card" class="lifehack-result-card hidden">
             <h3><i data-lucide="zap"></i> Wskazówka Operacyjna (Stoper)</h3>
             <p id="result-lifehack-text"></p>
           </div>
@@ -237,6 +270,14 @@ export class AiTracerPanel {
               </div>
             </div>
 
+            <div class="terminal-stage-filters">
+              <span class="filter-label">Filtruj Etap:</span>
+              <button class="stage-filter-btn active" data-filter-stage="0">Wszystkie</button>
+              <button class="stage-filter-btn" data-filter-stage="1">Etap 1 (Ścieżka)</button>
+              <button class="stage-filter-btn" data-filter-stage="2">Etap 2 (Dekompozycja 3D)</button>
+              <button class="stage-filter-btn" data-filter-stage="3">Etap 3 (Synteza)</button>
+            </div>
+
             <div class="terminal-tabs">
               <button class="term-tab active" data-tab="tab-thoughts">Myśli AI (Reasoning)</button>
               <button class="term-tab" data-tab="tab-raw">Surowy SSE</button>
@@ -256,7 +297,6 @@ export class AiTracerPanel {
           </div>
         </div>
       </div>
-
     `;
 
     return panel;
@@ -339,6 +379,28 @@ export class AiTracerPanel {
     this.container.querySelector('#btn-toggle-ai-terminal')?.addEventListener('click', () => {
       const inspector = this.container.querySelector('#ai-terminal-inspector');
       inspector?.classList.toggle('hidden');
+    });
+
+    this.container.querySelectorAll('.stage-filter-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const stageNum = parseInt((e.currentTarget as HTMLElement).getAttribute('data-filter-stage') || '0', 10);
+        this.currentTerminalStageFilter = stageNum;
+        this.container.querySelectorAll('.stage-filter-btn').forEach((b) => b.classList.remove('active'));
+        (e.currentTarget as HTMLElement).classList.add('active');
+
+        // Apply filter to terminal logs view
+        const logsView = this.container.querySelector('#terminal-logs-view') as HTMLElement;
+        if (logsView) {
+          const lines = logsView.textContent?.split('\n') || [];
+          if (this.currentTerminalStageFilter === 0) {
+            logsView.style.display = 'block';
+          } else {
+            const filterTag = `[ETAP ${this.currentTerminalStageFilter}/3]`;
+            const filtered = lines.filter((l) => l.includes(filterTag) || l.includes('═════════'));
+            logsView.textContent = filtered.join('\n');
+          }
+        }
+      });
     });
 
     this.container.querySelectorAll('.term-tab').forEach((tabBtn) => {
@@ -452,6 +514,10 @@ export class AiTracerPanel {
   }
 
   private resetTerminalViews() {
+    this.pendingLogs = [];
+    this.pendingThoughts = [];
+    this.pendingRawChunks = [];
+
     const thoughts = this.container.querySelector('#terminal-thoughts-view');
     const raw = this.container.querySelector('#terminal-raw-view');
     const payloadJson = this.container.querySelector('#terminal-payload-json');
@@ -471,33 +537,70 @@ export class AiTracerPanel {
     if (speed) speed.textContent = '0 tok/s';
   }
 
-  private createStreamCallbacks(): StreamCallbacks {
-    return {
-      onLog: (msg, type = 'info') => {
-        const logsView = this.container.querySelector('#terminal-logs-view');
-        if (!logsView) return;
-        const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const prefix = type === 'error' ? '[ERR]' : type === 'warn' ? '[WARN]' : type === 'success' ? '[OK]' : '[INFO]';
-        logsView.textContent += `[${time}] ${prefix} ${msg}\n`;
+  private scheduleTerminalFlush() {
+    if (this.rafScheduled) return;
+    this.rafScheduled = true;
+
+    requestAnimationFrame(() => {
+      this.rafScheduled = false;
+      this.flushTerminalBuffers();
+    });
+  }
+
+  private flushTerminalBuffers() {
+    if (this.pendingLogs.length > 0) {
+      const logsView = this.container.querySelector('#terminal-logs-view');
+      if (logsView) {
+        let chunk = '';
+        this.pendingLogs.forEach((l) => {
+          chunk += `[${l.time}] ${l.prefix} ${l.msg}\n`;
+        });
+        logsView.textContent += chunk;
         logsView.scrollTop = logsView.scrollHeight;
-      },
-      onReasoning: (thought) => {
-        const thoughtsView = this.container.querySelector('#terminal-thoughts-view');
-        if (!thoughtsView) return;
+      }
+      this.pendingLogs = [];
+    }
+
+    if (this.pendingThoughts.length > 0) {
+      const thoughtsView = this.container.querySelector('#terminal-thoughts-view');
+      if (thoughtsView) {
         if (thoughtsView.textContent === 'Oczekiwanie na generowanie myśli modelu...') {
           thoughtsView.textContent = '';
         }
-        thoughtsView.textContent += thought;
+        thoughtsView.textContent += this.pendingThoughts.join('');
         thoughtsView.scrollTop = thoughtsView.scrollHeight;
-      },
-      onRawSseChunk: (chunk) => {
-        const rawView = this.container.querySelector('#terminal-raw-view');
-        if (!rawView) return;
+      }
+      this.pendingThoughts = [];
+    }
+
+    if (this.pendingRawChunks.length > 0) {
+      const rawView = this.container.querySelector('#terminal-raw-view');
+      if (rawView) {
         if (rawView.textContent?.startsWith('Oczekiwanie na surowe ramki')) {
           rawView.textContent = '';
         }
-        rawView.textContent += chunk + '\n';
+        rawView.textContent += this.pendingRawChunks.join('\n') + '\n';
         rawView.scrollTop = rawView.scrollHeight;
+      }
+      this.pendingRawChunks = [];
+    }
+  }
+
+  private createStreamCallbacks(): StreamCallbacks {
+    return {
+      onLog: (msg, type = 'info') => {
+        const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const prefix = type === 'error' ? '[ERR]' : type === 'warn' ? '[WARN]' : type === 'success' ? '[OK]' : '[INFO]';
+        this.pendingLogs.push({ time, prefix, msg });
+        this.scheduleTerminalFlush();
+      },
+      onReasoning: (thought) => {
+        this.pendingThoughts.push(thought);
+        this.scheduleTerminalFlush();
+      },
+      onRawSseChunk: (chunk) => {
+        this.pendingRawChunks.push(chunk);
+        this.scheduleTerminalFlush();
       },
       onRequestPayload: (payload) => {
         const payloadJson = this.container.querySelector('#terminal-payload-json');
@@ -519,8 +622,96 @@ export class AiTracerPanel {
         if (promptEl) promptEl.textContent = `Prompt: ${metrics.promptTokens} tok`;
         if (genEl) genEl.textContent = `Gen: ${metrics.completionTokens} tok`;
         if (speedEl) speedEl.textContent = `${metrics.speedTokSec} tok/s`;
+      },
+      onStageProgress: (stage, stageName, data) => {
+        this.handleStageProgress(stage, stageName, data);
       }
     };
+  }
+
+  private handleStageProgress(stage: 1 | 2 | 3, stageName: string, data?: any) {
+    // Update Stepper Bar
+    const stepperSteps = this.container.querySelectorAll('.stage-step');
+    stepperSteps.forEach((stepEl) => {
+      const stNum = parseInt(stepEl.getAttribute('data-stage') || '0', 10);
+      if (stNum < stage) {
+        stepEl.className = 'stage-step done';
+      } else if (stNum === stage) {
+        stepEl.className = 'stage-step active';
+      } else {
+        stepEl.className = 'stage-step';
+      }
+    });
+
+    const loadingText = this.container.querySelector('#ai-loading-text');
+    if (loadingText) loadingText.textContent = `[Etap ${stage}/3]: ${stageName}`;
+
+    // STAGE 1 DONE: Reveal Identified Path Card & Skeleton Timeline Steps IMMEDIATELY
+    if (stage === 1 && data && data.storyNodes) {
+      const resultsWrapper = this.container.querySelector('#ai-results-wrapper');
+      resultsWrapper?.classList.remove('hidden');
+
+      const pathCard = this.container.querySelector('#identified-path-card');
+      const chipsContainer = this.container.querySelector('#identified-path-chips');
+
+      if (pathCard && chipsContainer) {
+        chipsContainer.innerHTML = '';
+        data.storyNodes.forEach((nodeId: string, idx: number) => {
+          const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
+          const chip = document.createElement('div');
+          chip.className = 'identified-node-chip';
+          chip.innerHTML = `<span class="chip-idx">${idx + 1}</span><strong>${nodeId}</strong> <span>${nodeDef?.title || ''}</span>`;
+          chipsContainer.appendChild(chip);
+
+          if (idx < data.storyNodes.length - 1) {
+            const arr = document.createElement('span');
+            arr.className = 'path-arrow';
+            arr.textContent = '➔';
+            chipsContainer.appendChild(arr);
+          }
+        });
+
+        pathCard.classList.remove('hidden');
+      }
+
+      // Render Skeleton Step Loaders on Timeline
+      this.renderSkeletonTimelineSteps(data.storyNodes);
+
+      // Load Trace into Canvas Animation Controller & Focus Step 0
+      // CRITICAL UX RULE: ZERO AUTO-PLAY! Set Step 0 and softly highlight nodes.
+      this.showTopPlayer();
+      this.animationController.loadTrace(data.storyNodes, data.matchedLinks || []);
+      this.animationController.stepTo(0);
+    }
+  }
+
+  private renderSkeletonTimelineSteps(storyNodes: string[]) {
+    const timelineContainer = this.container.querySelector('#timeline-steps-list');
+    if (!timelineContainer) return;
+
+    timelineContainer.innerHTML = '';
+    storyNodes.forEach((nodeId, idx) => {
+      const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
+      const isObserver = nodeId === 'm1';
+
+      const skeletonCard = document.createElement('div');
+      skeletonCard.className = `timeline-step-card skeleton-step-card ${isObserver ? 'observer-step' : ''}`;
+      skeletonCard.dataset.nodeId = nodeId;
+      skeletonCard.innerHTML = `
+        <div class="step-num ${isObserver ? 'observer-num' : ''}">${idx + 1}</div>
+        <div class="step-content">
+          <div class="step-header">
+            <span class="step-node-badge ${isObserver ? 'observer-node-badge' : ''}">${nodeId}</span>
+            <strong class="step-title">${nodeDef?.title || nodeId}</strong>
+            ${isObserver ? '<span class="observer-tag">KLUCZOWY OBSERWATOR</span>' : ''}
+          </div>
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line long"></div>
+        </div>
+      `;
+      timelineContainer.appendChild(skeletonCard);
+    });
   }
 
   private async handleStartInterview() {
@@ -590,8 +781,9 @@ export class AiTracerPanel {
 
     this.hideError();
     this.resetTerminalViews();
-    this.showLoading(true, 'Generuję głęboką sekwencję przepływu na grafie...');
+    this.showLoading(true, '[ETAP 1/3]: Wyznaczanie Ścieżki w Grafie...');
     this.container.querySelector('#ai-interview-wrapper')?.classList.add('hidden');
+    this.container.querySelector('#ai-terminal-wrapper')?.classList.remove('hidden');
 
     const keyInput = this.container.querySelector('#input-openrouter-key') as HTMLInputElement;
     const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
@@ -600,10 +792,6 @@ export class AiTracerPanel {
       const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value, this.createStreamCallbacks());
       this.lastAnalysisResult = result;
       this.renderResults(result);
-      
-      this.showTopPlayer();
-      this.animationController.loadTrace(result.storyNodes, result.matchedLinks);
-      this.animationController.stepTo(0);
     } catch (err: any) {
       this.showError(err.message || 'Wystąpił błąd podczas analizy.');
     } finally {
@@ -618,7 +806,6 @@ export class AiTracerPanel {
 
     wrapper.classList.remove('hidden');
     terminalWrapper?.classList.remove('hidden');
-
 
     const storyTextEl = this.container.querySelector('#context-story-text');
     if (storyTextEl) storyTextEl.textContent = result.initialStory || 'Brak wpisu';
@@ -638,9 +825,18 @@ export class AiTracerPanel {
       answersBox.classList.add('hidden');
     }
 
-    (this.container.querySelector('#result-summary-text') as HTMLElement).textContent = result.summary;
-    (this.container.querySelector('#result-root-cause') as HTMLElement).textContent = result.rootCause;
-    (this.container.querySelector('#result-lifehack-text') as HTMLElement).textContent = result.operationalLifehack;
+    const summaryCard = this.container.querySelector('#result-summary-card');
+    if (summaryCard) {
+      (this.container.querySelector('#result-summary-text') as HTMLElement).textContent = result.summary;
+      (this.container.querySelector('#result-root-cause') as HTMLElement).textContent = result.rootCause;
+      summaryCard.classList.remove('hidden');
+    }
+
+    const lifehackCard = this.container.querySelector('#lifehack-card');
+    if (lifehackCard) {
+      (this.container.querySelector('#result-lifehack-text') as HTMLElement).textContent = result.operationalLifehack;
+      lifehackCard.classList.remove('hidden');
+    }
 
     const modelBadge = this.container.querySelector('#result-model-badge');
     if (modelBadge) {
@@ -654,6 +850,7 @@ export class AiTracerPanel {
       observerCard.classList.remove('hidden');
     }
 
+    // Render Full Timeline Steps with Progressive Card Unfolding
     const timelineContainer = this.container.querySelector('#timeline-steps-list');
     if (timelineContainer) {
       timelineContainer.innerHTML = '';
@@ -661,7 +858,7 @@ export class AiTracerPanel {
       result.steps.forEach((step, idx) => {
         const stepEl = document.createElement('div');
         const isObserver = step.nodeId === 'm1';
-        stepEl.className = `timeline-step-card ${isObserver ? 'observer-step' : ''}`;
+        stepEl.className = `timeline-step-card step-unfold-anim ${isObserver ? 'observer-step' : ''}`;
         stepEl.dataset.stepIndex = idx.toString();
         stepEl.dataset.nodeId = step.nodeId;
 
@@ -675,7 +872,7 @@ export class AiTracerPanel {
             </div>
             <p class="step-trigger">⚡ <strong>Wyzwalacz:</strong> ${step.trigger}</p>
             <p class="step-desc">🧠 <strong>Co się stało:</strong> ${step.whatHappened}</p>
-            <p class="step-why">🔍 <strong>Mechanika kroku:</strong> ${step.whyItHappened}</p>
+            <p class="step-why">🔍 <strong>Mechanika kroku (3D):</strong> ${step.whyItHappened}</p>
           </div>
         `;
 
@@ -729,13 +926,13 @@ export class AiTracerPanel {
     md += `## 🧠 Synteza Mechaniki\n${r.summary}\n\n`;
     md += `**Przyczyna Źródłowa:** ${r.rootCause}\n\n`;
     md += `## 👁️ Rola Jaźni / Obserwatora (m1)\n${r.observerRoleSummary}\n\n`;
-    md += `## 🔄 Sekwencja Przepływu Kroki\n`;
+    md += `## 🔄 Sekwencja Przepływu Kroki (Dekompozycja 3D)\n`;
 
     r.steps.forEach((s) => {
-      md += `### Kroki ${s.step}: ${s.nodeId} - ${s.title}\n`;
+      md += `### Krok ${s.step}: ${s.nodeId} - ${s.title}\n`;
       md += `- **Wyzwalacz:** ${s.trigger}\n`;
       md += `- **Co się stało:** ${s.whatHappened}\n`;
-      md += `- **Mechanika:** ${s.whyItHappened}\n\n`;
+      md += `- **Mechanika 3D:** ${s.whyItHappened}\n\n`;
     });
 
     md += `## ⚡ Wskazówka Operacyjna (Stoper)\n${r.operationalLifehack}\n`;
@@ -752,46 +949,44 @@ export class AiTracerPanel {
     });
   }
 
-  private updateActiveTimelineStep(activeIndex: number) {
+  private updateActiveTimelineStep(index: number) {
     const stepCards = this.container.querySelectorAll('.timeline-step-card');
     stepCards.forEach((card, idx) => {
-      if (idx === activeIndex) {
-        card.classList.add('active');
+      if (idx === index) {
+        card.classList.add('active-step-highlight');
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
-        card.classList.remove('active');
+        card.classList.remove('active-step-highlight');
       }
     });
   }
 
   private updateDynamicSynthesisHeader(index: number, nodeId: string) {
-    const headerTitle = this.container.querySelector('#synthesis-header-title');
-    if (!headerTitle) return;
+    const titleEl = this.container.querySelector('#synthesis-header-title');
+    if (!titleEl) return;
 
-    const nodeDef = MIKRO_NODES.find((n) => n.id === nodeId);
-    const nodeTitle = nodeDef ? nodeDef.title : nodeId;
-
-    if (index >= 0) {
-      headerTitle.innerHTML = `<i data-lucide="activity"></i> Synteza Mechaniki (Krok ${index + 1}: ${nodeTitle})`;
-    } else {
-      headerTitle.innerHTML = `<i data-lucide="activity"></i> Synteza Mechaniki`;
+    if (!this.lastAnalysisResult || index < 0) {
+      titleEl.innerHTML = `<i data-lucide="activity"></i> Synteza Mechaniki Całej Sytuacji`;
+      createIcons({ icons });
+      return;
     }
+
+    const totalSteps = this.lastAnalysisResult.storyNodes.length;
+    titleEl.innerHTML = `<i data-lucide="activity"></i> Synteza Mechaniki — Krok ${index + 1} z ${totalSteps} (Węzeł: ${nodeId})`;
     createIcons({ icons });
   }
 
-  private showLoading(loading: boolean, text: string = 'Dekomponuję sytuację na czynniki pierwsze...') {
-    const loadingState = this.container.querySelector('#ai-loading');
+  private showLoading(show: boolean, text: string = 'Generuję głęboką sekwencję przepływu na grafie...') {
+    const loading = this.container.querySelector('#ai-loading');
     const loadingText = this.container.querySelector('#ai-loading-text');
-    const terminalWrapper = this.container.querySelector('#ai-terminal-wrapper');
     if (loadingText) loadingText.textContent = text;
-    if (loading) {
-      loadingState?.classList.remove('hidden');
-      terminalWrapper?.classList.remove('hidden');
+
+    if (show) {
+      loading?.classList.remove('hidden');
     } else {
-      loadingState?.classList.add('hidden');
+      loading?.classList.add('hidden');
     }
   }
-
 
   private showError(msg: string) {
     const errBox = this.container.querySelector('#ai-error-box');
@@ -918,4 +1113,3 @@ export class AiTracerPanel {
     }
   }
 }
-

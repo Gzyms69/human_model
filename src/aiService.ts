@@ -40,6 +40,7 @@ export interface StreamCallbacks {
   onRequestPayload?: (payload: object) => void;
   onProviderInfo?: (info: { provider?: string; model?: string; ttftMs?: number }) => void;
   onMetrics?: (metrics: { promptTokens: number; completionTokens: number; speedTokSec: number; durationMs: number }) => void;
+  onStageProgress?: (stage: 1 | 2 | 3, stageName: string, data?: any) => void;
 }
 
 const DEFAULT_API_KEY = '';
@@ -407,7 +408,10 @@ export async function analyzeSituation(
   // ==========================================
   // ETAP 1: Fast Path Finder (~600 tokenów)
   // ==========================================
-  callbacks?.onLog?.(`[ETAP 1/3]: Wyznaczanie ścieżki przyczynowo-skutkowej w grafie...`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onLog?.(`▶ ETAP 1/3: Wyznaczanie Ścieżki w Grafie (Fast Path Finder)...`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onStageProgress?.(1, 'Wyznaczanie Ścieżki w Grafie...');
 
   const compactNodes = formatNodesCompact(MIKRO_NODES);
   const compactLinks = formatLinksCompact(MIKRO_LINKS);
@@ -447,11 +451,15 @@ Wymogi:
   const matchedLinks = pathExp.matchedLinks;
 
   callbacks?.onLog?.(`[ETAP 1/3 Sukces]: Ścieżka wyznaczona (${storyNodes.join(' -> ')}).`, 'success');
+  callbacks?.onStageProgress?.(1, 'Ścieżka wyznaczona', { storyNodes, matchedLinks });
 
   // ==========================================
   // ETAP 2: Trójwymiarowa Dekompozycja Kroków (Psychologia + Filozofia + Nauka)
   // ==========================================
-  callbacks?.onLog?.(`[ETAP 2/3]: Trójwymiarowa dekompozycja naukowa, psychologiczna i filozoficzna...`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onLog?.(`▶ ETAP 2/3: Trójwymiarowa Dekompozycja (Nauka, Psychologia, Filozofia)...`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onStageProgress?.(2, 'Dekompozycja Kroków 3D...');
 
   const activeNodesDefs = MIKRO_NODES.filter((n) => storyNodes.includes(n.id));
   const activeNodes3D = formatActiveNodes3D(activeNodesDefs);
@@ -503,11 +511,15 @@ Zwróć TYLKO czysty JSON:
 
   const parsedStage2 = cleanJsonResponse(stage2Result.rawContent);
   callbacks?.onLog?.(`[ETAP 2/3 Sukces]: Zdekomponowano trójwymiarowo wszystkie kroki.`, 'success');
+  callbacks?.onStageProgress?.(2, 'Zdekomponowano kroki 3D', { steps: parsedStage2.steps, edgeExplanations: parsedStage2.edgeExplanations });
 
   // ==========================================
   // ETAP 3: Meta-Synteza Jaźni (m1), Root Cause i Lifehacki
   // ==========================================
-  callbacks?.onLog?.(`[ETAP 3/3]: Meta-synteza roli Jaźni (m1), przyczyny źródłowej i Stoperów...`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onLog?.(`▶ ETAP 3/3: Meta-Synteza Jaźni (m1), Przyczyny Źródłowej i Stoperów...`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onStageProgress?.(3, 'Meta-Synteza i Stopery...');
 
   const activeLifehacks = activeNodesDefs
     .map((n) => `- ${n.title}: ${n.lifehack}`)
@@ -562,7 +574,10 @@ Zwróć TYLKO czysty JSON:
     usedModel: stage2Result.usedModel
   };
 
-  return sanitizeAnalysisResult(finalResult);
+  const sanitized = sanitizeAnalysisResult(finalResult);
+  callbacks?.onStageProgress?.(3, 'Generowanie zakończone', { result: sanitized });
+
+  return sanitized;
 }
 
 function sanitizeAnalysisResult(result: SituationAnalysisResult): SituationAnalysisResult {
