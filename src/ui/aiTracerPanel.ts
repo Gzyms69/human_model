@@ -4,17 +4,30 @@ import { TracerAnimationController } from '../tracerAnimation';
 import { MIKRO_NODES } from '../data';
 import { initiateOpenRouterLogin } from '../openrouterAuth';
 
+interface StageTerminalData {
+  thoughts: string;
+  rawSse: string[];
+  payload: object | null;
+  providerInfo: { provider?: string; model?: string; ttftMs?: number } | null;
+  logs: { time: string; prefix: string; msg: string }[];
+  metrics: { promptTokens: number; completionTokens: number; speedTokSec: number; durationMs: number } | null;
+}
+
 export class AiTracerPanel {
   private container: HTMLElement;
   private animationController: TracerAnimationController;
   private lastAnalysisResult: SituationAnalysisResult | null = null;
 
-  // RAF Throttling Buffers for 60 FPS Terminal Performance
-  private pendingLogs: { time: string; prefix: string; msg: string; stage?: number }[] = [];
-  private pendingThoughts: string[] = [];
-  private pendingRawChunks: string[] = [];
+  // Stage-Isolated Terminal Data Storage
+  private terminalData: Record<1 | 2 | 3, StageTerminalData> = {
+    1: { thoughts: '', rawSse: [], payload: null, providerInfo: null, logs: [], metrics: null },
+    2: { thoughts: '', rawSse: [], payload: null, providerInfo: null, logs: [], metrics: null },
+    3: { thoughts: '', rawSse: [], payload: null, providerInfo: null, logs: [], metrics: null }
+  };
+
+  private currentStage: 1 | 2 | 3 = 1;
+  private currentTerminalStageFilter: number = 0; // 0 = All, 1 = Stage 1, 2 = Stage 2, 3 = Stage 3
   private rafScheduled: boolean = false;
-  private currentTerminalStageFilter: number = 0; // 0 = all, 1, 2, 3
 
   constructor(animationController: TracerAnimationController) {
     this.animationController = animationController;
@@ -387,19 +400,7 @@ export class AiTracerPanel {
         this.currentTerminalStageFilter = stageNum;
         this.container.querySelectorAll('.stage-filter-btn').forEach((b) => b.classList.remove('active'));
         (e.currentTarget as HTMLElement).classList.add('active');
-
-        // Apply filter to terminal logs view
-        const logsView = this.container.querySelector('#terminal-logs-view') as HTMLElement;
-        if (logsView) {
-          const lines = logsView.textContent?.split('\n') || [];
-          if (this.currentTerminalStageFilter === 0) {
-            logsView.style.display = 'block';
-          } else {
-            const filterTag = `[ETAP ${this.currentTerminalStageFilter}/3]`;
-            const filtered = lines.filter((l) => l.includes(filterTag) || l.includes('═════════'));
-            logsView.textContent = filtered.join('\n');
-          }
-        }
+        this.renderActiveTerminalViews();
       });
     });
 
@@ -421,6 +422,8 @@ export class AiTracerPanel {
           targetView.classList.remove('hidden');
           targetView.classList.add('active');
         }
+
+        this.renderActiveTerminalViews();
       });
     });
   }
@@ -514,9 +517,11 @@ export class AiTracerPanel {
   }
 
   private resetTerminalViews() {
-    this.pendingLogs = [];
-    this.pendingThoughts = [];
-    this.pendingRawChunks = [];
+    this.terminalData = {
+      1: { thoughts: '', rawSse: [], payload: null, providerInfo: null, logs: [], metrics: null },
+      2: { thoughts: '', rawSse: [], payload: null, providerInfo: null, logs: [], metrics: null },
+      3: { thoughts: '', rawSse: [], payload: null, providerInfo: null, logs: [], metrics: null }
+    };
 
     const thoughts = this.container.querySelector('#terminal-thoughts-view');
     const raw = this.container.querySelector('#terminal-raw-view');
@@ -543,87 +548,145 @@ export class AiTracerPanel {
 
     requestAnimationFrame(() => {
       this.rafScheduled = false;
-      this.flushTerminalBuffers();
+      this.renderActiveTerminalViews();
     });
   }
 
-  private flushTerminalBuffers() {
-    if (this.pendingLogs.length > 0) {
-      const logsView = this.container.querySelector('#terminal-logs-view');
-      if (logsView) {
-        let chunk = '';
-        this.pendingLogs.forEach((l) => {
-          chunk += `[${l.time}] ${l.prefix} ${l.msg}\n`;
-        });
-        logsView.textContent += chunk;
-        logsView.scrollTop = logsView.scrollHeight;
+  private renderActiveTerminalViews() {
+    const filter = this.currentTerminalStageFilter; // 0, 1, 2, 3
+
+    // 1. RENDER THOUGHTS VIEW
+    const thoughtsView = this.container.querySelector('#terminal-thoughts-view');
+    if (thoughtsView) {
+      if (filter === 1) {
+        thoughtsView.textContent = this.terminalData[1].thoughts || 'Brak przemyśleń dla Etapu 1 (Wyznaczanie Ścieżki).';
+      } else if (filter === 2) {
+        thoughtsView.textContent = this.terminalData[2].thoughts || 'Brak przemyśleń dla Etapu 2 (Dekompozycja 3D).';
+      } else if (filter === 3) {
+        thoughtsView.textContent = this.terminalData[3].thoughts || 'Brak przemyśleń dla Etapu 3 (Synteza & Stoper).';
+      } else {
+        let combined = '';
+        if (this.terminalData[1].thoughts) combined += `════════════════════════════════════════\n▶ MYŚLI AI - ETAP 1 (Ścieżka)\n════════════════════════════════════════\n${this.terminalData[1].thoughts}\n\n`;
+        if (this.terminalData[2].thoughts) combined += `════════════════════════════════════════\n▶ MYŚLI AI - ETAP 2 (Dekompozycja 3D)\n════════════════════════════════════════\n${this.terminalData[2].thoughts}\n\n`;
+        if (this.terminalData[3].thoughts) combined += `════════════════════════════════════════\n▶ MYŚLI AI - ETAP 3 (Synteza & Stoper)\n════════════════════════════════════════\n${this.terminalData[3].thoughts}`;
+        thoughtsView.textContent = combined || 'Oczekiwanie na generowanie myśli modelu...';
       }
-      this.pendingLogs = [];
+      thoughtsView.scrollTop = thoughtsView.scrollHeight;
     }
 
-    if (this.pendingThoughts.length > 0) {
-      const thoughtsView = this.container.querySelector('#terminal-thoughts-view');
-      if (thoughtsView) {
-        if (thoughtsView.textContent === 'Oczekiwanie na generowanie myśli modelu...') {
-          thoughtsView.textContent = '';
-        }
-        thoughtsView.textContent += this.pendingThoughts.join('');
-        thoughtsView.scrollTop = thoughtsView.scrollHeight;
+    // 2. RENDER RAW SSE VIEW
+    const rawView = this.container.querySelector('#terminal-raw-view');
+    if (rawView) {
+      if (filter === 1) {
+        rawView.textContent = this.terminalData[1].rawSse.join('\n') || 'Brak ramek SSE dla Etapu 1.';
+      } else if (filter === 2) {
+        rawView.textContent = this.terminalData[2].rawSse.join('\n') || 'Brak ramek SSE dla Etapu 2.';
+      } else if (filter === 3) {
+        rawView.textContent = this.terminalData[3].rawSse.join('\n') || 'Brak ramek SSE dla Etapu 3.';
+      } else {
+        let combined = '';
+        if (this.terminalData[1].rawSse.length) combined += `# --- ETAP 1 (Ścieżka) ---\n` + this.terminalData[1].rawSse.join('\n') + '\n\n';
+        if (this.terminalData[2].rawSse.length) combined += `# --- ETAP 2 (Dekompozycja 3D) ---\n` + this.terminalData[2].rawSse.join('\n') + '\n\n';
+        if (this.terminalData[3].rawSse.length) combined += `# --- ETAP 3 (Synteza) ---\n` + this.terminalData[3].rawSse.join('\n');
+        rawView.textContent = combined || 'Oczekiwanie na surowe ramki sieciowe SSE...';
       }
-      this.pendingThoughts = [];
+      rawView.scrollTop = rawView.scrollHeight;
     }
 
-    if (this.pendingRawChunks.length > 0) {
-      const rawView = this.container.querySelector('#terminal-raw-view');
-      if (rawView) {
-        if (rawView.textContent?.startsWith('Oczekiwanie na surowe ramki')) {
-          rawView.textContent = '';
-        }
-        rawView.textContent += this.pendingRawChunks.join('\n') + '\n';
-        rawView.scrollTop = rawView.scrollHeight;
+    // 3. RENDER PAYLOAD & PROVIDER VIEW
+    const payloadJson = this.container.querySelector('#terminal-payload-json');
+    const providerBadge = this.container.querySelector('#payload-provider-badge');
+
+    if (payloadJson) {
+      if (filter === 1) {
+        payloadJson.textContent = this.terminalData[1].payload ? JSON.stringify(this.terminalData[1].payload, null, 2) : 'Brak ładunku dla Etapu 1.';
+      } else if (filter === 2) {
+        payloadJson.textContent = this.terminalData[2].payload ? JSON.stringify(this.terminalData[2].payload, null, 2) : 'Brak ładunku dla Etapu 2.';
+      } else if (filter === 3) {
+        payloadJson.textContent = this.terminalData[3].payload ? JSON.stringify(this.terminalData[3].payload, null, 2) : 'Brak ładunku dla Etapu 3.';
+      } else {
+        const combinedObj = {
+          etap1_path_finder: this.terminalData[1].payload,
+          etap2_decomposition_3d: this.terminalData[2].payload,
+          etap3_synthesis: this.terminalData[3].payload
+        };
+        payloadJson.textContent = JSON.stringify(combinedObj, null, 2);
       }
-      this.pendingRawChunks = [];
+    }
+
+    if (providerBadge) {
+      const activeStage = filter === 0 ? this.currentStage : (filter as 1 | 2 | 3);
+      const info = this.terminalData[activeStage]?.providerInfo;
+      const prov = info?.provider || 'OpenRouter Router';
+      const model = info?.model || 'Domyślny';
+      const ttft = info?.ttftMs ? `${info.ttftMs} ms` : 'b/d';
+      providerBadge.textContent = `Dostawca Infrastruktury (Etap ${activeStage}): ${prov} | Model Wykonawczy: ${model} | TTFT: ${ttft}`;
+    }
+
+    // 4. RENDER LOGS VIEW
+    const logsView = this.container.querySelector('#terminal-logs-view');
+    if (logsView) {
+      let activeLogs: { time: string; prefix: string; msg: string }[] = [];
+      if (filter === 1) {
+        activeLogs = this.terminalData[1].logs;
+      } else if (filter === 2) {
+        activeLogs = this.terminalData[2].logs;
+      } else if (filter === 3) {
+        activeLogs = this.terminalData[3].logs;
+      } else {
+        activeLogs = [
+          ...this.terminalData[1].logs,
+          ...this.terminalData[2].logs,
+          ...this.terminalData[3].logs
+        ];
+      }
+
+      logsView.textContent = activeLogs.map((l) => `[${l.time}] ${l.prefix} ${l.msg}`).join('\n');
+      logsView.scrollTop = logsView.scrollHeight;
+    }
+
+    // 5. UPDATE METRICS BADGE
+    const activeStageMetrics = filter === 0 ? this.terminalData[this.currentStage].metrics : this.terminalData[filter as 1 | 2 | 3].metrics;
+    if (activeStageMetrics) {
+      const promptEl = this.container.querySelector('#metric-prompt-tok');
+      const genEl = this.container.querySelector('#metric-gen-tok');
+      const speedEl = this.container.querySelector('#metric-speed');
+      if (promptEl) promptEl.textContent = `Prompt: ${activeStageMetrics.promptTokens} tok`;
+      if (genEl) genEl.textContent = `Gen: ${activeStageMetrics.completionTokens} tok`;
+      if (speedEl) speedEl.textContent = `${activeStageMetrics.speedTokSec} tok/s`;
     }
   }
 
   private createStreamCallbacks(): StreamCallbacks {
     return {
-      onLog: (msg, type = 'info') => {
+      onLog: (msg, type = 'info', stage = 1) => {
         const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const prefix = type === 'error' ? '[ERR]' : type === 'warn' ? '[WARN]' : type === 'success' ? '[OK]' : '[INFO]';
-        this.pendingLogs.push({ time, prefix, msg });
+        this.terminalData[stage].logs.push({ time, prefix, msg });
         this.scheduleTerminalFlush();
       },
-      onReasoning: (thought) => {
-        this.pendingThoughts.push(thought);
+      onReasoning: (thought, stage = 1) => {
+        this.terminalData[stage].thoughts += thought;
         this.scheduleTerminalFlush();
       },
-      onRawSseChunk: (chunk) => {
-        this.pendingRawChunks.push(chunk);
+      onRawSseChunk: (chunk, stage = 1) => {
+        this.terminalData[stage].rawSse.push(chunk);
         this.scheduleTerminalFlush();
       },
-      onRequestPayload: (payload) => {
-        const payloadJson = this.container.querySelector('#terminal-payload-json');
-        if (!payloadJson) return;
-        payloadJson.textContent = JSON.stringify(payload, null, 2);
+      onRequestPayload: (payload, stage = 1) => {
+        this.terminalData[stage].payload = payload;
+        this.scheduleTerminalFlush();
       },
-      onProviderInfo: (info) => {
-        const providerBadge = this.container.querySelector('#payload-provider-badge');
-        if (!providerBadge) return;
-        const prov = info.provider || 'OpenRouter Router';
-        const model = info.model || 'Domyślny';
-        const ttft = info.ttftMs ? `${info.ttftMs} ms` : 'b/d';
-        providerBadge.textContent = `Dostawca Infrastruktury: ${prov} | Model Wykonawczy: ${model} | TTFT: ${ttft}`;
+      onProviderInfo: (info, stage = 1) => {
+        this.terminalData[stage].providerInfo = info;
+        this.scheduleTerminalFlush();
       },
-      onMetrics: (metrics) => {
-        const promptEl = this.container.querySelector('#metric-prompt-tok');
-        const genEl = this.container.querySelector('#metric-gen-tok');
-        const speedEl = this.container.querySelector('#metric-speed');
-        if (promptEl) promptEl.textContent = `Prompt: ${metrics.promptTokens} tok`;
-        if (genEl) genEl.textContent = `Gen: ${metrics.completionTokens} tok`;
-        if (speedEl) speedEl.textContent = `${metrics.speedTokSec} tok/s`;
+      onMetrics: (metrics, stage = 1) => {
+        this.terminalData[stage].metrics = metrics;
+        this.scheduleTerminalFlush();
       },
       onStageProgress: (stage, stageName, data) => {
+        this.currentStage = stage;
         this.handleStageProgress(stage, stageName, data);
       }
     };

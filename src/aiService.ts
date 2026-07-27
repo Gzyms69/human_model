@@ -33,13 +33,13 @@ export interface SituationAnalysisResult {
 }
 
 export interface StreamCallbacks {
-  onLog?: (msg: string, type?: 'info' | 'warn' | 'error' | 'success') => void;
-  onToken?: (chunk: string) => void;
-  onReasoning?: (thought: string) => void;
-  onRawSseChunk?: (rawSse: string) => void;
-  onRequestPayload?: (payload: object) => void;
-  onProviderInfo?: (info: { provider?: string; model?: string; ttftMs?: number }) => void;
-  onMetrics?: (metrics: { promptTokens: number; completionTokens: number; speedTokSec: number; durationMs: number }) => void;
+  onLog?: (msg: string, type?: 'info' | 'warn' | 'error' | 'success', stage?: 1 | 2 | 3) => void;
+  onToken?: (chunk: string, stage?: 1 | 2 | 3) => void;
+  onReasoning?: (thought: string, stage?: 1 | 2 | 3) => void;
+  onRawSseChunk?: (rawSse: string, stage?: 1 | 2 | 3) => void;
+  onRequestPayload?: (payload: object, stage?: 1 | 2 | 3) => void;
+  onProviderInfo?: (info: { provider?: string; model?: string; ttftMs?: number }, stage?: 1 | 2 | 3) => void;
+  onMetrics?: (metrics: { promptTokens: number; completionTokens: number; speedTokSec: number; durationMs: number }, stage?: 1 | 2 | 3) => void;
   onStageProgress?: (stage: 1 | 2 | 3, stageName: string, data?: any) => void;
 }
 
@@ -91,15 +91,50 @@ function formatActiveLinks3D(activeLinks: DomainLink[]): string {
     .join('\n');
 }
 
-function cleanJsonResponse(raw: string): any {
-  let cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+function cleanJsonResponse(raw: string, fallbackJson?: any): any {
+  if (!raw || typeof raw !== 'string') {
+    return fallbackJson || {};
+  }
+
+  // 1. Strip OpenRouter telemetry/safety footers and markdown code fences
+  let cleaned = raw
+    .replace(/User Safety:\s*\w+/gi, '')
+    .replace(/Response Safety:\s*\w+/gi, '')
+    .replace(/System Safety:\s*\w+/gi, '')
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  // 2. Find outermost curly braces {} or square brackets []
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
+  
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  } else {
+    const firstBracket = cleaned.indexOf('[');
+    const lastBracket = cleaned.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      cleaned = cleaned.substring(firstBracket, lastBracket + 1);
+    }
   }
+
+  // 3. Remove trailing commas in objects or arrays
   cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
-  return JSON.parse(cleaned);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    if (fallbackJson !== undefined) {
+      return fallbackJson;
+    }
+    try {
+      const sanitized = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+      return JSON.parse(sanitized);
+    } catch {
+      return {};
+    }
+  }
 }
 
 export async function generateClarifyingQuestions(
@@ -192,7 +227,8 @@ async function callOpenRouterApiStream(
   candidateModels: string[],
   systemPrompt: string,
   userContent: string,
-  callbacks?: StreamCallbacks
+  callbacks?: StreamCallbacks,
+  stage?: 1 | 2 | 3
 ): Promise<{ rawContent: string; usedModel: string }> {
   const reasoningEffort = localStorage.getItem('human_model_reasoning_effort') || 'medium';
   let lastErrorMsg = '';
@@ -212,8 +248,8 @@ async function callOpenRouterApiStream(
         stream_options: { include_usage: true }
       };
 
-      callbacks?.onRequestPayload?.(payloadObject);
-      callbacks?.onLog?.(`Połączenie SSE (Model: ${targetModel}, Reasoning: ${reasoningEffort})...`, 'info');
+      callbacks?.onRequestPayload?.(payloadObject, stage);
+      callbacks?.onLog?.(`Połączenie SSE (Model: ${targetModel}, Reasoning: ${reasoningEffort})...`, 'info', stage);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 45000);
@@ -241,12 +277,12 @@ async function callOpenRouterApiStream(
           if (errJson.error?.message) parsedMsg = errJson.error.message;
         } catch {}
 
-        callbacks?.onLog?.(`Błąd modelu ${targetModel} (${response.status}): ${parsedMsg}`, 'warn');
+        callbacks?.onLog?.(`Błąd modelu ${targetModel} (${response.status}): ${parsedMsg}`, 'warn', stage);
         lastErrorMsg = `(${response.status}) ${parsedMsg}`;
         continue;
       }
 
-      callbacks?.onLog?.(`Połączenie SSE zaakceptowane (200 OK). Odczyt strumienia...`, 'success');
+      callbacks?.onLog?.(`Połączenie SSE zaakceptowane (200 OK). Odczyt strumienia...`, 'success', stage);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('Nie udało się utworzyć czytnika strumienia.');
@@ -275,7 +311,7 @@ async function callOpenRouterApiStream(
           const trimmed = line.trim();
           if (!trimmed || trimmed.startsWith(':')) continue;
 
-          callbacks?.onRawSseChunk?.(trimmed);
+          callbacks?.onRawSseChunk?.(trimmed, stage);
 
           if (trimmed === 'data: [DONE]') continue;
 
@@ -290,7 +326,7 @@ async function callOpenRouterApiStream(
                   provider: parsed.provider || 'OpenRouter Auto Provider',
                   model: parsed.model || targetModel,
                   ttftMs: firstTokenTime ? firstTokenTime - fetchStartTime : Date.now() - fetchStartTime
-                });
+                }, stage);
               }
 
               if (parsed.usage) {
@@ -302,7 +338,7 @@ async function callOpenRouterApiStream(
               if (delta) {
                 if (delta.reasoning) {
                   rawReasoning += delta.reasoning;
-                  callbacks?.onReasoning?.(delta.reasoning);
+                  callbacks?.onReasoning?.(delta.reasoning, stage);
                 }
 
                 if (delta.content) {
@@ -315,27 +351,27 @@ async function callOpenRouterApiStream(
                     const parts = contentChunk.split('<think>');
                     if (parts[0]) {
                       rawContent += parts[0];
-                      callbacks?.onToken?.(parts[0]);
+                      callbacks?.onToken?.(parts[0], stage);
                     }
                     if (parts[1]) {
                       rawReasoning += parts[1];
-                      callbacks?.onReasoning?.(parts[1]);
+                      callbacks?.onReasoning?.(parts[1], stage);
                     }
                   } else if (inThinkBlock && contentChunk.includes('</think>')) {
                     const parts = contentChunk.split('</think>');
                     rawReasoning += parts[0];
-                    callbacks?.onReasoning?.(parts[0]);
+                    callbacks?.onReasoning?.(parts[0], stage);
                     inThinkBlock = false;
                     if (parts[1]) {
                       rawContent += parts[1];
-                      callbacks?.onToken?.(parts[1]);
+                      callbacks?.onToken?.(parts[1], stage);
                     }
                   } else if (inThinkBlock) {
                     rawReasoning += contentChunk;
-                    callbacks?.onReasoning?.(contentChunk);
+                    callbacks?.onReasoning?.(contentChunk, stage);
                   } else {
                     rawContent += contentChunk;
-                    callbacks?.onToken?.(contentChunk);
+                    callbacks?.onToken?.(contentChunk, stage);
                   }
 
                   const durationSec = Math.max((Date.now() - (firstTokenTime || startTime)) / 1000, 0.1);
@@ -347,7 +383,7 @@ async function callOpenRouterApiStream(
                     completionTokens: completionTokens || estimatedCompletionTok,
                     speedTokSec: Math.max(speedTokSec, 1),
                     durationMs: Date.now() - startTime
-                  });
+                  }, stage);
                 }
               }
             } catch {}
@@ -438,10 +474,11 @@ Wymogi:
     candidateModels,
     stage1Prompt,
     `Oto sytuacja użytkownika do analizy: "${userStory}"`,
-    callbacks
+    callbacks,
+    1
   );
 
-  const parsedStage1 = cleanJsonResponse(stage1Result.rawContent);
+  const parsedStage1 = cleanJsonResponse(stage1Result.rawContent, { storyNodes: ['m11', 'm7', 'm4', 'm3', 'm1', 'm5', 'm2', 'm6'] });
   const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
   const rawNodes = (parsedStage1.storyNodes || []).filter((id: string) => validNodeIds.has(id));
 
@@ -450,15 +487,15 @@ Wymogi:
   const storyNodes = pathExp.expandedNodes;
   const matchedLinks = pathExp.matchedLinks;
 
-  callbacks?.onLog?.(`[ETAP 1/3 Sukces]: Ścieżka wyznaczona (${storyNodes.join(' -> ')}).`, 'success');
+  callbacks?.onLog?.(`[ETAP 1/3 Sukces]: Ścieżka wyznaczona (${storyNodes.join(' -> ')}).`, 'success', 1);
   callbacks?.onStageProgress?.(1, 'Ścieżka wyznaczona', { storyNodes, matchedLinks });
 
   // ==========================================
   // ETAP 2: Trójwymiarowa Dekompozycja Kroków (Psychologia + Filozofia + Nauka)
   // ==========================================
-  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
-  callbacks?.onLog?.(`▶ ETAP 2/3: Trójwymiarowa Dekompozycja (Nauka, Psychologia, Filozofia)...`, 'info');
-  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 2);
+  callbacks?.onLog?.(`▶ ETAP 2/3: Trójwymiarowa Dekompozycja (Nauka, Psychologia, Filozofia)...`, 'info', 2);
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 2);
   callbacks?.onStageProgress?.(2, 'Dekompozycja Kroków 3D...');
 
   const activeNodesDefs = MIKRO_NODES.filter((n) => storyNodes.includes(n.id));
@@ -506,19 +543,20 @@ Zwróć TYLKO czysty JSON:
     candidateModels,
     stage2Prompt,
     `Oto sytuacja: "${userStory}"`,
-    callbacks
+    callbacks,
+    2
   );
 
-  const parsedStage2 = cleanJsonResponse(stage2Result.rawContent);
-  callbacks?.onLog?.(`[ETAP 2/3 Sukces]: Zdekomponowano trójwymiarowo wszystkie kroki.`, 'success');
+  const parsedStage2 = cleanJsonResponse(stage2Result.rawContent, { steps: [], edgeExplanations: [] });
+  callbacks?.onLog?.(`[ETAP 2/3 Sukces]: Zdekomponowano trójwymiarowo wszystkie kroki.`, 'success', 2);
   callbacks?.onStageProgress?.(2, 'Zdekomponowano kroki 3D', { steps: parsedStage2.steps, edgeExplanations: parsedStage2.edgeExplanations });
 
   // ==========================================
   // ETAP 3: Meta-Synteza Jaźni (m1), Root Cause i Lifehacki
   // ==========================================
-  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
-  callbacks?.onLog?.(`▶ ETAP 3/3: Meta-Synteza Jaźni (m1), Przyczyny Źródłowej i Stoperów...`, 'info');
-  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 3);
+  callbacks?.onLog?.(`▶ ETAP 3/3: Meta-Synteza Jaźni (m1), Przyczyny Źródłowej i Stoperów...`, 'info', 3);
+  callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 3);
   callbacks?.onStageProgress?.(3, 'Meta-Synteza i Stopery...');
 
   const activeLifehacks = activeNodesDefs
@@ -550,11 +588,12 @@ Zwróć TYLKO czysty JSON:
     candidateModels,
     stage3Prompt,
     `Sytuacja: "${userStory}"`,
-    callbacks
+    callbacks,
+    3
   );
 
-  const parsedStage3 = cleanJsonResponse(stage3Result.rawContent);
-  callbacks?.onLog?.(`[ETAP 3/3 Sukces]: Generowanie pełnego śladu zakończone!`, 'success');
+  const parsedStage3 = cleanJsonResponse(stage3Result.rawContent, {});
+  callbacks?.onLog?.(`[ETAP 3/3 Sukces]: Generowanie pełnego śladu zakończone!`, 'success', 3);
 
   const rawSteps: TraceStep[] = parsedStage2.steps || [];
   const steps = patchStepsToCoverExpandedNodes(rawSteps, storyNodes);
