@@ -48,11 +48,11 @@ const DEFAULT_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemma-4-3
 
 const FALLBACK_MODELS = [
   'google/gemma-4-31b-it:free',
-  'openrouter/free',
-  'google/gemma-4-26b-a4b-it:free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'openai/gpt-oss-20b:free',
-  'nvidia/nemotron-3-ultra-550b-a55b:free'
+  'google/gemma-2-9b-it:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'qwen/qwen-2.5-72b-instruct:free',
+  'deepseek/deepseek-r1:free',
+  'openrouter/free'
 ];
 
 function formatNodesCompact(nodes: DomainNode[]): string {
@@ -93,14 +93,15 @@ function formatActiveLinks3D(activeLinks: DomainLink[]): string {
 
 function cleanJsonResponse(raw: string, fallbackJson?: any): any {
   if (!raw || typeof raw !== 'string') {
-    return fallbackJson || {};
+    return fallbackJson !== undefined ? fallbackJson : {};
   }
 
-  // 1. Strip OpenRouter telemetry/safety footers and markdown code fences
+  // 1. Strip OpenRouter telemetry/safety footers, thought blocks, and markdown code fences
   let cleaned = raw
-    .replace(/User Safety:\s*\w+/gi, '')
-    .replace(/Response Safety:\s*\w+/gi, '')
-    .replace(/System Safety:\s*\w+/gi, '')
+    .replace(/User Safety:\s*[\s\S]*?(?=\n\n|\{|\[|$)/gi, '')
+    .replace(/Response Safety:\s*[\s\S]*?(?=\n\n|\{|\[|$)/gi, '')
+    .replace(/System Safety:\s*[\s\S]*?(?=\n\n|\{|\[|$)/gi, '')
+    .replace(/We need to decide if user input is safe[\s\S]*?(?=\n\n|\{|\[|$)/gi, '')
     .replace(/```json/gi, '')
     .replace(/```/g, '')
     .trim();
@@ -108,15 +109,19 @@ function cleanJsonResponse(raw: string, fallbackJson?: any): any {
   // 2. Find outermost curly braces {} or square brackets []
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
-  
+  const firstBracket = cleaned.indexOf('[');
+  const lastBracket = cleaned.lastIndexOf(']');
+
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  } else if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    cleaned = cleaned.substring(firstBracket, lastBracket + 1);
   } else {
-    const firstBracket = cleaned.indexOf('[');
-    const lastBracket = cleaned.lastIndexOf(']');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      cleaned = cleaned.substring(firstBracket, lastBracket + 1);
+    // No JSON structure found in response
+    if (fallbackJson !== undefined) {
+      return fallbackJson;
     }
+    return {};
   }
 
   // 3. Remove trailing commas in objects or arrays
@@ -125,13 +130,13 @@ function cleanJsonResponse(raw: string, fallbackJson?: any): any {
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    if (fallbackJson !== undefined) {
-      return fallbackJson;
-    }
     try {
       const sanitized = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
       return JSON.parse(sanitized);
     } catch {
+      if (fallbackJson !== undefined) {
+        return fallbackJson;
+      }
       return {};
     }
   }
@@ -392,6 +397,12 @@ async function callOpenRouterApiStream(
       }
 
       if (rawContent.trim()) {
+        const testParsed = cleanJsonResponse(rawContent, null);
+        if (testParsed === null) {
+          callbacks?.onLog?.(`Model ${targetModel} zwrócił odpowiedź niebędącą poprawnym JSON-em (np. wyłącznie raport bezpieczeństwa). Przejście do kolejnego modelu...`, 'warn', stage);
+          lastErrorMsg = `Brak poprawnej struktury JSON w odpowiedzi z ${targetModel}`;
+          continue;
+        }
         return { rawContent, usedModel: targetModel };
       }
     } catch (err: any) {
