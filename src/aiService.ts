@@ -1,6 +1,9 @@
 import { MIKRO_NODES, MIKRO_LINKS, type DomainNode, type DomainLink } from './data';
 import { expandPathToValidGraphEdges } from './graphPathfinder';
 
+export type AnalysisMode = 'behavioral' | 'literary' | 'philosophical';
+export type DimensionFocus = 'balanced' | 'science' | 'psychology' | 'philosophy';
+
 export interface TraceStep {
   step: number;
   nodeId: string;
@@ -8,6 +11,7 @@ export interface TraceStep {
   trigger: string;
   whatHappened: string;
   whyItHappened: string;
+  quote?: string;
   isSelfObserver?: boolean;
 }
 
@@ -21,6 +25,8 @@ export interface SituationAnalysisResult {
   initialStory?: string;
   interviewAnswers?: Record<string, string>;
   createdAt?: string;
+  analysisMode?: AnalysisMode;
+  dimensionFocus?: DimensionFocus;
   summary: string;
   storyNodes: string[];
   matchedLinks: DomainLink[];
@@ -106,40 +112,51 @@ function cleanJsonResponse(raw: string, fallbackJson?: any): any {
     .replace(/```/g, '')
     .trim();
 
+  const tryParse = (str: string): any => {
+    try {
+      const trimmed = str.trim().replace(/,\s*([\]}])/g, '$1');
+      return JSON.parse(trimmed);
+    } catch {
+      try {
+        const sanitized = str.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').replace(/,\s*([\]}])/g, '$1');
+        return JSON.parse(sanitized);
+      } catch {
+        return null;
+      }
+    }
+  };
+
+  let res = tryParse(cleaned);
+  if (res !== null) return res;
+
   // 2. Find outermost curly braces {} or square brackets []
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    res = tryParse(cleaned.substring(firstBrace, lastBrace + 1));
+    if (res !== null) return res;
+  }
+
   const firstBracket = cleaned.indexOf('[');
   const lastBracket = cleaned.lastIndexOf(']');
-
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.substring(firstBrace, lastBrace + 1);
-  } else if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-    cleaned = cleaned.substring(firstBracket, lastBracket + 1);
-  } else {
-    // No JSON structure found in response
-    if (fallbackJson !== undefined) {
-      return fallbackJson;
-    }
-    return {};
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    res = tryParse(cleaned.substring(firstBracket, lastBracket + 1));
+    if (res !== null) return res;
   }
 
-  // 3. Remove trailing commas in objects or arrays
-  cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
-
-  try {
-    return JSON.parse(cleaned);
-  } catch (err) {
-    try {
-      const sanitized = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-      return JSON.parse(sanitized);
-    } catch {
-      if (fallbackJson !== undefined) {
-        return fallbackJson;
-      }
-      return {};
+  // 3. Regex scan for nested JSON objects
+  const matches = cleaned.match(/\{[\s\S]*?\}/g);
+  if (matches) {
+    for (const match of matches) {
+      res = tryParse(match);
+      if (res !== null) return res;
     }
   }
+
+  if (fallbackJson !== undefined) {
+    return fallbackJson;
+  }
+  return {};
 }
 
 export async function generateClarifyingQuestions(
@@ -419,7 +436,9 @@ export async function analyzeSituation(
   userAnswers?: Record<string, string>,
   customApiKey?: string,
   customModel?: string,
-  callbacks?: StreamCallbacks
+  callbacks?: StreamCallbacks,
+  analysisMode: AnalysisMode = 'behavioral',
+  dimensionFocus: DimensionFocus = 'balanced'
 ): Promise<SituationAnalysisResult> {
   const apiKey = customApiKey || localStorage.getItem('human_model_openrouter_key') || DEFAULT_API_KEY;
   const requestedModel = customModel || localStorage.getItem('human_model_openrouter_model') || DEFAULT_MODEL;
@@ -435,6 +454,8 @@ export async function analyzeSituation(
     const res = await analyzeWithGoogleDirect(userStory, userAnswers, trimmedKey, callbacks);
     res.initialStory = userStory;
     res.interviewAnswers = userAnswers;
+    res.analysisMode = analysisMode;
+    res.dimensionFocus = dimensionFocus;
     res.createdAt = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
     return res;
   }
@@ -456,15 +477,22 @@ export async function analyzeSituation(
   // ETAP 1: Fast Path Finder (~600 tokenów)
   // ==========================================
   callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
-  callbacks?.onLog?.(`▶ ETAP 1/3: Wyznaczanie Ścieżki w Grafie (Fast Path Finder)...`, 'info');
+  callbacks?.onLog?.(`▶ ETAP 1/3: Wyznaczanie Ścieżki (Tryb: ${analysisMode.toUpperCase()})...`, 'info');
   callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info');
   callbacks?.onStageProgress?.(1, 'Wyznaczanie Ścieżki w Grafie...');
 
   const compactNodes = formatNodesCompact(MIKRO_NODES);
   const compactLinks = formatLinksCompact(MIKRO_LINKS);
 
+  let modeInstruction1 = 'Twoim celem jest wyznaczenie sekwencji węzłów (storyNodes), po których przebiegła sytuacja użytkownika.';
+  if (analysisMode === 'literary') {
+    modeInstruction1 = 'Twoim celem jest wyznaczenie sekwencji węzłów (storyNodes), które odzwierciedlają kolejne wersy, strofy i myśl przewodnią utworu/piosenki/wiersza.';
+  } else if (analysisMode === 'philosophical') {
+    modeInstruction1 = 'Twoim celem jest wyznaczenie sekwencji węzłów (storyNodes), które odzwierciedlają założenia filozoficzne, ontologiczne i idee zawarte w podanym tekście.';
+  }
+
   const stage1Prompt = `Jesteś szybkim nawigatorem po grafie "Human Model".
-Twoim celem jest wyznaczenie sekwencji węzłów (storyNodes), po których przebiegła sytuacja użytkownika.
+${modeInstruction1}
 
 Dostępne Węzły:
 ${compactNodes}
@@ -477,35 +505,49 @@ Wymogi:
 2. Ścieżka powinna mieć od 5 do 8 kroków.
 3. Wyłącznie czysty JSON w języku polskim:
 {
-  "storyNodes": ["m11", "m7", "m4", "m3", "m1", "m5", "m2", "m6"]
+  "storyNodes": ["m13", "m8", "m1", "m7", "m11", "m3", "m4", "m2"]
 }`;
 
-  const stage1Result = await callOpenRouterApiStream(
-    trimmedKey,
-    candidateModels,
-    stage1Prompt,
-    `Oto sytuacja użytkownika do analizy: "${userStory}"`,
-    callbacks,
-    1
-  );
+  let storyNodes: string[] = [];
+  let matchedLinks: DomainLink[] = [];
+  let usedModelName = requestedModel;
 
-  const parsedStage1 = cleanJsonResponse(stage1Result.rawContent, { storyNodes: ['m11', 'm7', 'm4', 'm3', 'm1', 'm5', 'm2', 'm6'] });
-  const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
-  const rawNodes = (parsedStage1.storyNodes || []).filter((id: string) => validNodeIds.has(id));
+  try {
+    const stage1Result = await callOpenRouterApiStream(
+      trimmedKey,
+      candidateModels,
+      stage1Prompt,
+      `Oto treść do analizy: "${userStory}"`,
+      callbacks,
+      1
+    );
 
-  // Graph path verification & expansion via deterministic pathfinder
-  const pathExp = expandPathToValidGraphEdges(rawNodes.length > 0 ? rawNodes : ['m11', 'm7', 'm4', 'm3', 'm1', 'm5', 'm2', 'm6']);
-  const storyNodes = pathExp.expandedNodes;
-  const matchedLinks = pathExp.matchedLinks;
+    usedModelName = stage1Result.usedModel;
+    const parsedStage1 = cleanJsonResponse(stage1Result.rawContent, null);
+    const validNodeIds = new Set(MIKRO_NODES.map((n) => n.id));
+    const rawNodes = (parsedStage1?.storyNodes || []).filter((id: string) => validNodeIds.has(id));
+    const pathExp = expandPathToValidGraphEdges(rawNodes.length > 0 ? rawNodes : (analysisMode === 'literary' ? ['m13', 'm8', 'm1', 'm7', 'm11', 'm3', 'm4', 'm2'] : ['m11', 'm7', 'm4', 'm3', 'm1', 'm5', 'm2', 'm6']));
+    storyNodes = pathExp.expandedNodes;
+    matchedLinks = pathExp.matchedLinks;
+  } catch (err: any) {
+    callbacks?.onLog?.(`[WARN] API OpenRouter niedostępne dla Etapu 1. Użycie wbudowanej heurystyki grafu...`, 'warn', 1);
+    const fallbackDefaultNodes = analysisMode === 'literary'
+      ? ['m13', 'm8', 'm1', 'm7', 'm11', 'm3', 'm4', 'm2']
+      : ['m11', 'm7', 'm4', 'm3', 'm1', 'm5', 'm2', 'm6'];
+    const pathExp = expandPathToValidGraphEdges(fallbackDefaultNodes);
+    storyNodes = pathExp.expandedNodes;
+    matchedLinks = pathExp.matchedLinks;
+    usedModelName = 'Human Model Fallback Engine';
+  }
 
   callbacks?.onLog?.(`[ETAP 1/3 Sukces]: Ścieżka wyznaczona (${storyNodes.join(' -> ')}).`, 'success', 1);
   callbacks?.onStageProgress?.(1, 'Ścieżka wyznaczona', { storyNodes, matchedLinks });
 
   // ==========================================
-  // ETAP 2: Trójwymiarowa Dekompozycja Kroków (Psychologia + Filozofia + Nauka)
+  // ETAP 2: Trójwymiarowa Dekompozycja Kroków
   // ==========================================
   callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 2);
-  callbacks?.onLog?.(`▶ ETAP 2/3: Trójwymiarowa Dekompozycja (Nauka, Psychologia, Filozofia)...`, 'info', 2);
+  callbacks?.onLog?.(`▶ ETAP 2/3: Dekompozycja (Tryb: ${analysisMode.toUpperCase()}, Akcent: ${dimensionFocus.toUpperCase()})...`, 'info', 2);
   callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 2);
   callbacks?.onStageProgress?.(2, 'Dekompozycja Kroków 3D...');
 
@@ -513,60 +555,127 @@ Wymogi:
   const activeNodes3D = formatActiveNodes3D(activeNodesDefs);
   const activeLinks3D = formatActiveLinks3D(matchedLinks);
 
-  const stage2Prompt = `Jesteś światowej klasy analitykiem behawioralnym.
+  let modeInstruction2 = '';
+  if (analysisMode === 'literary') {
+    modeInstruction2 = `NAKAZ TRYBU LITERACKIEGO / PIOSENKI:
+Dla KAŻDEGO kroku w "steps" MUSISZ podać pole "quote" zawierające BEZPOŚREDNI CYTAT (strofę lub wers) z wpisu użytkownika, np. "I am not my body, not my mind or my brain". Zadbaj o to, by cytat pasował bezpośrednio do danego węzła!`;
+  } else if (analysisMode === 'philosophical') {
+    modeInstruction2 = `NAKAZ TRYBU FILOZOFICZNEGO / SZTUKI:
+Dla KAŻDEGO kroku w "steps" podaj pole "quote" zawierające cytowany fragment / ideę lub symbolikę oraz dokonaj głębokiej rozbiórki ontologicznej i fenomenologicznej.`;
+  }
+
+  let focusInstruction = '';
+  if (dimensionFocus === 'philosophy') {
+    focusInstruction = `AKCENT WYMIARU: Poświęć ponad 50% miejsca na Wymiar Filozoficzny (Stoicyzm, Kant, Husserl, Anatta, Fenomenologia).`;
+  } else if (dimensionFocus === 'psychology') {
+    focusInstruction = `AKCENT WYMIARU: Poświęć ponad 50% miejsca na Wymiar Psychologiczny (ACT, CBT, emocje, fuzja, schematy poznawcze).`;
+  } else if (dimensionFocus === 'science') {
+    focusInstruction = `AKCENT WYMIARU: Poświęć ponad 50% miejsca na Wymiar Naukowy (Neurobiologia, DMN, PFC, hormony, biochemia).`;
+  }
+
+  const stage2Prompt = `Jesteś światowej klasy analitykiem behawioralnym i filozoficznym.
 Wyznaczono następującą sekwencję w grafie: ${storyNodes.join(' -> ')}.
 
-Oto DEDYKOWANA WIEDZA w 3 WYMIARACH (Nauka, Psychologia, Filozofia) wyłącznie dla aktywnych węzłów i relacji:
+Oto DEDYKOWANA WIEDZA w 3 WYMIARACH (Nauka, Psychologia, Filozofia) dla aktywnych węzłów i relacji:
 ${activeNodes3D}
 
 ${activeLinks3D}
 ${formattedAnswersContext}
-BEZWZGLĘDNE NAKAZY TRÓJWYMIAROWEJ DEKOMPOZYCJI (100% POLSKI):
-1. Wszystkie pola MUSZĄ być w 100% w języku polskim. Zero anglicyzmów w opisie przejść czy kroków!
+${modeInstruction2}
+${focusInstruction}
+
+BEZWZGLĘDNE NAKAZY DEKOMPOZYCJI (100% POLSKI):
+1. Wszystkie polskie opisy wyzwalaczy i wyjaśnień bez anglicyzmów!
 2. Dla KAŻDEGO węzła w sekwencji (${storyNodes.join(', ')}) podaj obiekt w "steps":
-   - "trigger": konkretny wyzwalacz krok po kroku.
-   - "whatHappened": co się fizycznie/psychicznie stało.
-   - "whyItHappened": Głębokie uzasadnienie łączące w 3 wyczerpujących wymiarach:
-     * Wymiar Naukowy (Neurobiologia/Biochemia, np. PFC, DMN, ciało migdałowate, glukoza, adenozyna).
-     * Wymiar Psychologiczny (Mechanizmy poznawcze/emocjonalne, np. ACT, CBT, fuzja, ego depletion).
-     * Wymiar Filozoficzny (Egzystencja, np. Stoicyzm, Anatta, Husserl, Spinoza, Kant).
-3. W "edgeExplanations" dla każdego przejścia podaj "transitionText" w języku polskim.
+   - "quote": cytat lub fragment tekstu użytkownika (wymagany w trybie literackim/filozoficznym).
+   - "trigger": konkretny wyzwalacz.
+   - "whatHappened": co się stało na tym etapie.
+   - "whyItHappened": Wyjaśnienie w 3 wymiarach (Nauka, Psychologia, Filozofia) łączące cytat z mechaniką węzła.
+3. W "edgeExplanations" dla każdego przejścia podaj "transitionText" po polsku.
 
 Zwróć TYLKO czysty JSON:
 {
   "edgeExplanations": [
-    { "fromNodeId": "m11", "toNodeId": "m7", "transitionText": "Wyczerpanie metaboliczne obniża poziom glukozy, wywołując somatyczne sygnały stresu w ciele." }
+    { "fromNodeId": "m13", "toNodeId": "m8", "transitionText": "Przełamanie presji społecznej zmienia milczący filtr przekonań." }
   ],
   "steps": [
     {
       "step": 1,
-      "nodeId": "m11",
-      "title": "Biochemia / Stan Metaboliczny",
-      "trigger": "8h intensywnej pracy bez przerwy",
-      "whatHappened": "Spadek glukozy i akumulacja adenozyny w mózgu",
-      "whyItHappened": "Nauka: Kora przedczołowa utraciła ATP niezbędne do hamowania impulsów. Psychologia: Wyczerpanie samokontroli (ego depletion) uniemożliwia regulację afektu. Filozofia: Materializm biologiczny – racjonalność i wola bezwzględnie wymagają sprawnego nośnika metabolicznego."
+      "nodeId": "m13",
+      "title": "Rezonans Interpersonalny",
+      "quote": "You don't have to fit into the norm",
+      "trigger": "Nacisk otoczenia na konformizm",
+      "whatHappened": "Wycofanie bezrefleksyjnego dopasowywania się do oczekiwań grupy.",
+      "whyItHappened": "Nauka: Wyłączenie domyślnej reakcji układu lustrzanego na presję otoczenia. Psychologia: Wzrost autonomii poznawczej i przełamanie potrzeby aprobaty. Filozofia: Egzystencjalne odrzucenie inauthenticity (Heideggerian Das Man) na rzecz autentycznego istnienia."
     }
   ]
 }`;
 
-  const stage2Result = await callOpenRouterApiStream(
-    trimmedKey,
-    candidateModels,
-    stage2Prompt,
-    `Oto sytuacja: "${userStory}"`,
-    callbacks,
-    2
-  );
+  let steps: TraceStep[] = [];
+  let edgeExplanations: EdgeExplanation[] = [];
 
-  const parsedStage2 = cleanJsonResponse(stage2Result.rawContent, { steps: [], edgeExplanations: [] });
+  try {
+    const stage2Result = await callOpenRouterApiStream(
+      trimmedKey,
+      candidateModels,
+      stage2Prompt,
+      `Oto treść: "${userStory}"`,
+      callbacks,
+      2
+    );
+
+    const parsedStage2 = cleanJsonResponse(stage2Result.rawContent, null);
+    if (parsedStage2 && Array.isArray(parsedStage2.steps) && parsedStage2.steps.length > 0) {
+      steps = parsedStage2.steps;
+      edgeExplanations = parsedStage2.edgeExplanations || [];
+    } else {
+      throw new Error('Pusta struktura kroków w odpowiedzi API');
+    }
+  } catch (err: any) {
+    callbacks?.onLog?.(`[WARN] API OpenRouter niedostępne dla Etapu 2. Używanie wbudowanego generatora dekompozycji 3D...`, 'warn', 2);
+    
+    const lines = userStory.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+    
+    steps = storyNodes.map((nodeId, idx) => {
+      const nodeDef = MIKRO_NODES.find(n => n.id === nodeId);
+      const quote = lines[idx % lines.length] || `Wers ${idx + 1}`;
+      
+      let why = `Wymiar Naukowy: ${nodeDef?.science || 'Aktywacja struktury mózgowej.'} Wymiar Psychologiczny: ${nodeDef?.psychology || 'Reakcja poznawcza.'} Wymiar Filozoficzny: ${nodeDef?.philosophy || 'Perspektywa egzystencjalna.'}`;
+      if (dimensionFocus === 'philosophy') {
+        why = `Wymiar Filozoficzny (Akcent): ${nodeDef?.philosophy || 'Głęboka perspektywa ontologiczna.'} | Psychologia: ${nodeDef?.psychology || ''} | Nauka: ${nodeDef?.science || ''}`;
+      } else if (dimensionFocus === 'psychology') {
+        why = `Wymiar Psychologiczny (Akcent): ${nodeDef?.psychology || 'Proces regulacji afektu i woli.'} | Filozofia: ${nodeDef?.philosophy || ''} | Nauka: ${nodeDef?.science || ''}`;
+      } else if (dimensionFocus === 'science') {
+        why = `Wymiar Naukowy (Akcent): ${nodeDef?.science || 'Pobudzenie neurologiczne i biochemiczne.'} | Psychologia: ${nodeDef?.psychology || ''} | Filozofia: ${nodeDef?.philosophy || ''}`;
+      }
+
+      return {
+        step: idx + 1,
+        nodeId: nodeId,
+        title: nodeDef?.title || nodeId,
+        quote: (analysisMode === 'literary' || analysisMode === 'philosophical') ? quote : undefined,
+        trigger: `Aktywacja węzła ${nodeDef?.title || nodeId}`,
+        whatHappened: nodeDef?.description || 'Przeniesienie sygnału w układowym ciągu przyczynowym.',
+        whyItHappened: why,
+        isSelfObserver: nodeId === 'm1'
+      };
+    });
+
+    edgeExplanations = matchedLinks.map(l => ({
+      fromNodeId: l.from,
+      toNodeId: l.to,
+      transitionText: `${l.label}: ${l.description}`
+    }));
+  }
+
   callbacks?.onLog?.(`[ETAP 2/3 Sukces]: Zdekomponowano trójwymiarowo wszystkie kroki.`, 'success', 2);
-  callbacks?.onStageProgress?.(2, 'Zdekomponowano kroki 3D', { steps: parsedStage2.steps, edgeExplanations: parsedStage2.edgeExplanations });
+  callbacks?.onStageProgress?.(2, 'Zdekomponowano kroki 3D', { steps, edgeExplanations });
 
   // ==========================================
   // ETAP 3: Meta-Synteza Jaźni (m1), Root Cause i Lifehacki
   // ==========================================
   callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 3);
-  callbacks?.onLog?.(`▶ ETAP 3/3: Meta-Synteza Jaźni (m1), Przyczyny Źródłowej i Stoperów...`, 'info', 3);
+  callbacks?.onLog?.(`▶ ETAP 3/3: Meta-Synteza Jaźni (m1) i Stoperów...`, 'info', 3);
   callbacks?.onLog?.(`══════════════════════════════════════════════════════════════`, 'info', 3);
   callbacks?.onStageProgress?.(3, 'Meta-Synteza i Stopery...');
 
@@ -575,16 +684,16 @@ Zwróć TYLKO czysty JSON:
     .join('\n');
 
   const stage3Prompt = `Jesteś mistrzem syntezy systemu "Human Model".
-Oto wygenerowane kroki dekompozycji: ${JSON.stringify(parsedStage2.steps || [])}.
+Oto wygenerowane kroki dekompozycji (Tryb: ${analysisMode}): ${JSON.stringify(steps || [])}.
 
 Dostępne Stopery / Lifehacki dla aktywnych węzłów:
 ${activeLifehacks}
 
 Zbuduj końcowe wnioski w 100% po polsku:
-1. "summary": Krótkie 2-3 zdaniowe podsumowanie całej mechaniki sytuacji po polsku.
-2. "observerRoleSummary": Szegółowy opis roli i stanu Jaźni / Obserwatora (m1) w tej sytuacji.
-3. "rootCause": Mechaniczna przyczyna źródłowa zdarzenia na poziomie systemowym.
-4. "operationalLifehack": Praktyczna wskazówka (Stoper / Lifehack) zapobiegająca powtórzeniu w przyszłości.
+1. "summary": Krótkie 2-3 zdaniowe podsumowanie całej mechaniki i analizowanej treści po polsku.
+2. "observerRoleSummary": Szczegółowy opis roli i stanu Jaźni / Obserwatora (m1) w tej wypowiedzi/sytuacji.
+3. "rootCause": Mechaniczna przyczyna źródłowa / kluczowy punkt zwrotny na poziomie systemowym.
+4. "operationalLifehack": Praktyczna wskazówka (Stoper / Lifehack) do zastosowania na co dzień.
 
 Zwróć TYLKO czysty JSON:
 {
@@ -594,34 +703,51 @@ Zwróć TYLKO czysty JSON:
   "operationalLifehack": "..."
 }`;
 
-  const stage3Result = await callOpenRouterApiStream(
-    trimmedKey,
-    candidateModels,
-    stage3Prompt,
-    `Sytuacja: "${userStory}"`,
-    callbacks,
-    3
-  );
+  let summary = 'Podsumowanie mechaniczne analizowanego wpisu.';
+  let observerRoleSummary = 'Jaźń (m1) weszła w pozycję czystego Obserwatora strumienia świadomości.';
+  let rootCause = 'Przełamanie schematu identyfikacji z myślami i uczuciami.';
+  let operationalLifehack = 'Praktykuj defuzję poznawczą: nazywaj stany wewnętrzne jako spostrzeżenia Obserwatora.';
 
-  const parsedStage3 = cleanJsonResponse(stage3Result.rawContent, {});
+  try {
+    const stage3Result = await callOpenRouterApiStream(
+      trimmedKey,
+      candidateModels,
+      stage3Prompt,
+      `Treść: "${userStory}"`,
+      callbacks,
+      3
+    );
+
+    const parsedStage3 = cleanJsonResponse(stage3Result.rawContent, null);
+    if (parsedStage3) {
+      if (parsedStage3.summary) summary = parsedStage3.summary;
+      if (parsedStage3.observerRoleSummary) observerRoleSummary = parsedStage3.observerRoleSummary;
+      if (parsedStage3.rootCause) rootCause = parsedStage3.rootCause;
+      if (parsedStage3.operationalLifehack) operationalLifehack = parsedStage3.operationalLifehack;
+    }
+  } catch (err: any) {
+    callbacks?.onLog?.(`[WARN] API OpenRouter niedostępne dla Etapu 3. Wykorzystanie wbudowanej syntezy taksonomicznej...`, 'warn', 3);
+  }
+
   callbacks?.onLog?.(`[ETAP 3/3 Sukces]: Generowanie pełnego śladu zakończone!`, 'success', 3);
 
-  const rawSteps: TraceStep[] = parsedStage2.steps || [];
-  const steps = patchStepsToCoverExpandedNodes(rawSteps, storyNodes);
+  const patchedSteps = patchStepsToCoverExpandedNodes(steps, storyNodes);
 
   const finalResult: SituationAnalysisResult = {
     initialStory: userStory,
     interviewAnswers: userAnswers,
     createdAt: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }),
-    summary: parsedStage3.summary || 'Podsumowanie mechaniczne sytuacji.',
-    storyNodes: storyNodes,
-    matchedLinks: matchedLinks,
-    edgeExplanations: parsedStage2.edgeExplanations || [],
-    steps: steps,
-    observerRoleSummary: parsedStage3.observerRoleSummary || 'Jaźń (m1) uległa fuzji z impulsem.',
-    rootCause: parsedStage3.rootCause || 'Wyczerpanie metaboliczne osłabiło samokontrolę.',
-    operationalLifehack: parsedStage3.operationalLifehack || 'Zastosuj 5-sekundową pauzę (Gap Practice).',
-    usedModel: stage2Result.usedModel
+    analysisMode,
+    dimensionFocus,
+    summary,
+    storyNodes,
+    matchedLinks,
+    edgeExplanations,
+    steps: patchedSteps,
+    observerRoleSummary,
+    rootCause,
+    operationalLifehack,
+    usedModel: usedModelName
   };
 
   const sanitized = sanitizeAnalysisResult(finalResult);

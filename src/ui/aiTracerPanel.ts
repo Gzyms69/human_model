@@ -1,5 +1,5 @@
 import { createIcons, icons } from 'lucide';
-import { analyzeSituation, generateClarifyingQuestions, type SituationAnalysisResult, type StreamCallbacks } from '../aiService';
+import { analyzeSituation, generateClarifyingQuestions, type SituationAnalysisResult, type StreamCallbacks, type AnalysisMode, type DimensionFocus } from '../aiService';
 import { TracerAnimationController } from '../tracerAnimation';
 import { MIKRO_NODES } from '../data';
 import { initiateOpenRouterLogin } from '../openrouterAuth';
@@ -17,6 +17,8 @@ export class AiTracerPanel {
   private container: HTMLElement;
   private animationController: TracerAnimationController;
   private lastAnalysisResult: SituationAnalysisResult | null = null;
+  private currentAnalysisMode: AnalysisMode = 'behavioral';
+  private currentDimensionFocus: DimensionFocus = 'balanced';
 
   // Stage-Isolated Terminal Data Storage
   private terminalData: Record<1 | 2 | 3, StageTerminalData> = {
@@ -131,12 +133,31 @@ export class AiTracerPanel {
 
         <!-- INPUT SECTION -->
         <section id="ai-input-section" class="ai-input-section">
-          <label for="ai-story-input" class="input-label">Opisz zdarzenie ze swojego dnia:</label>
-          <textarea id="ai-story-input" rows="3" placeholder="np. Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?"></textarea>
+          <div class="ai-mode-selector-wrap" style="margin-bottom: 10px;">
+            <span class="mode-selector-label" style="font-size: 0.82rem; color: #888; display: block; margin-bottom: 4px;">Tryb Analizy:</span>
+            <div class="mode-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="mode-tab active" data-mode="behavioral" style="padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid var(--border-color, #444); color: #fff; cursor: pointer; font-size: 0.85rem;"><i data-lucide="message-square" style="width:14px; height:14px; vertical-align:-2px;"></i> Sytuacja Behawioralna</button>
+              <button class="mode-tab" data-mode="literary" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, #333); color: #aaa; cursor: pointer; font-size: 0.85rem;"><i data-lucide="music" style="width:14px; height:14px; vertical-align:-2px;"></i> Tekst / Poezja / Piosenka</button>
+              <button class="mode-tab" data-mode="philosophical" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color, #333); color: #aaa; cursor: pointer; font-size: 0.85rem;"><i data-lucide="landmark" style="width:14px; height:14px; vertical-align:-2px;"></i> Filozofia & Sztuka</button>
+            </div>
+          </div>
+
+          <div class="ai-dimension-selector-wrap" style="margin-bottom: 12px;">
+            <span class="mode-selector-label" style="font-size: 0.82rem; color: #888; display: block; margin-bottom: 4px;">Akcent Wymiaru (3D):</span>
+            <div class="dimension-chips" style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="dim-chip active" data-dim="balanced" style="padding: 4px 10px; border-radius: 12px; background: rgba(79, 172, 254, 0.2); border: 1px solid #4facfe; color: #4facfe; cursor: pointer; font-size: 0.8rem;">⚖️ Zbalansowany</button>
+              <button class="dim-chip" data-dim="philosophy" style="padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #aaa; cursor: pointer; font-size: 0.8rem;">🏛️ Filozofia</button>
+              <button class="dim-chip" data-dim="psychology" style="padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #aaa; cursor: pointer; font-size: 0.8rem;">🧘 Psychologia</button>
+              <button class="dim-chip" data-dim="science" style="padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid #444; color: #aaa; cursor: pointer; font-size: 0.8rem;">🧠 Nauka</button>
+            </div>
+          </div>
+
+          <label for="ai-story-input" id="input-label-text" class="input-label">Opisz zdarzenie ze swojego dnia:</label>
+          <textarea id="ai-story-input" rows="4" placeholder="np. Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?"></textarea>
           
           <div class="ai-presets-wrap">
             <span class="presets-label">Szybkie przykłady:</span>
-            <div class="presets-chips">
+            <div id="presets-chips-container" class="presets-chips">
               <button class="preset-chip" data-preset="Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?">💬 Kłótnia po pracy</button>
               <button class="preset-chip" data-preset="Mimo mocnego postanowienia diety, po stresoogennej rozmowie z szefem zjadłem dużą pizzę i słodycze.">🍔 Zajadanie stresu</button>
               <button class="preset-chip" data-preset="Od trzech dni odkładam wysłanie trudnego maila z wyjaśnieniem błędu w projekcie i odczuwam ściśnięty żołądek.">⏰ Prokrastynacja zadania</button>
@@ -356,6 +377,52 @@ export class AiTracerPanel {
       e.preventDefault();
       const drawer = this.container.querySelector('#ai-settings-drawer');
       drawer?.classList.remove('hidden');
+    });
+
+    // Mode Tab Switchers
+    this.container.querySelectorAll('.mode-tab').forEach((tab) => {
+      tab.addEventListener('click', (e) => {
+        const targetBtn = e.currentTarget as HTMLElement;
+        const mode = targetBtn.getAttribute('data-mode') as AnalysisMode;
+        if (!mode) return;
+        this.currentAnalysisMode = mode;
+
+        this.container.querySelectorAll('.mode-tab').forEach((b) => {
+          (b as HTMLElement).style.background = 'rgba(0,0,0,0.3)';
+          (b as HTMLElement).style.borderColor = 'var(--border-color, #333)';
+          (b as HTMLElement).style.color = '#aaa';
+          b.classList.remove('active');
+        });
+
+        targetBtn.style.background = 'rgba(255,255,255,0.12)';
+        targetBtn.style.borderColor = 'var(--border-color, #555)';
+        targetBtn.style.color = '#fff';
+        targetBtn.classList.add('active');
+
+        this.updatePresetsForMode(mode);
+      });
+    });
+
+    // Dimension Accent Chips
+    this.container.querySelectorAll('.dim-chip').forEach((chip) => {
+      chip.addEventListener('click', (e) => {
+        const targetBtn = e.currentTarget as HTMLElement;
+        const dim = targetBtn.getAttribute('data-dim') as DimensionFocus;
+        if (!dim) return;
+        this.currentDimensionFocus = dim;
+
+        this.container.querySelectorAll('.dim-chip').forEach((b) => {
+          (b as HTMLElement).style.background = 'rgba(255,255,255,0.05)';
+          (b as HTMLElement).style.borderColor = '#444';
+          (b as HTMLElement).style.color = '#aaa';
+          b.classList.remove('active');
+        });
+
+        targetBtn.style.background = 'rgba(79, 172, 254, 0.2)';
+        targetBtn.style.borderColor = '#4facfe';
+        targetBtn.style.color = '#4facfe';
+        targetBtn.classList.add('active');
+      });
     });
 
     this.container.querySelectorAll('.preset-chip').forEach((chip) => {
@@ -823,6 +890,49 @@ export class AiTracerPanel {
     });
   }
 
+  private updatePresetsForMode(mode: AnalysisMode) {
+    const container = this.container.querySelector('#presets-chips-container');
+    const labelText = this.container.querySelector('#input-label-text');
+    const textarea = this.container.querySelector('#ai-story-input') as HTMLTextAreaElement;
+    if (!container) return;
+
+    if (mode === 'literary') {
+      if (labelText) labelText.textContent = 'Wklej tekst utworu, piosenki lub wiersza:';
+      if (textarea) textarea.placeholder = 'Wklej słowa piosenki (np. MARINA - Ancient Dreams in a Modern Land) lub wiersza...';
+      container.innerHTML = `
+        <button class="preset-chip" data-preset="You don't have to be like everybody else\nYou don't have to fit into the norm\nYou are not here to conform\nI am here to take a look inside myself\nRecognize that I could be the eye, the eye of the storm\n\nI am not my body, not my mind or my brain (Ha!)\nNot my thoughts or feelings, I am not my DNA\nI am the observer, I'm a witness of life">🎵 MARINA - Ancient Dreams</button>
+        <button class="preset-chip" data-preset="Nic dwa razy się nie zdarza\ni nie zdarzy. Z tej przyczyny\nzrodziliśmy się bez wprawy\ni pomrzemy bez rutyny.\n\nChoćbyśmy uczniami byli\nnajtępszymi w szkole świata,\nnie będziemy poprawiali\nżadnej zimy ani lata.">📜 W. Szymborska - Nic dwa razy</button>
+        <button class="preset-chip" data-preset="Często dla rozrywki męże z załogi\nChwytają albatrosy, te pyszne ptaki morskie,\nCo płyną za statkiem, jak orły podniebne,\nNad gorzkimi falami, towarzysze podróżne.">🎧 Baudelaire - Albatros</button>
+      `;
+    } else if (mode === 'philosophical') {
+      if (labelText) labelText.textContent = 'Wpisz myśl filozoficzną, aforyzm lub opis dzieła sztuki:';
+      if (textarea) textarea.placeholder = 'np. Epiktet: Nie same rzeczy niepokoją ludzi, lecz ich wyobrażenia o rzeczach...';
+      container.innerHTML = `
+        <button class="preset-chip" data-preset="Nie same rzeczy niepokoją ludzi, lecz ich wyobrażenia i przekonania o tych rzeczach. Gdy doznajemy trudności, nie obwiniajmy innych, lecz samych siebie i nasze własne sądy.">🏛️ Epiktet - Rozmyślania (Stoicyzm)</button>
+        <button class="preset-chip" data-preset="Edvard Munch - Krzyk (1893). Obraz przedstawia postać trzymającą się za głowę z szeroko otwartymi ustami na tle płonącego nieba. Wizualizacja lęku egzystencjalnego i ucieczki przed przebodźcowaniem.">🎨 Munch - Krzyk (Symbolizm)</button>
+        <button class="preset-chip" data-preset="Człowiek jest skazany na wolność. Skazany, ponieważ sam siebie nie stworzył, a jednak wolny, gdyż raz rzucony w świat, jest odpowiedzialny za wszystko, co czyni.">💭 J.P. Sartre - Egzystencjalizm</button>
+      `;
+    } else {
+      if (labelText) labelText.textContent = 'Opisz zdarzenie ze swojego dnia:';
+      if (textarea) textarea.placeholder = 'np. Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?';
+      container.innerHTML = `
+        <button class="preset-chip" data-preset="Po całym tygodniu pracy bez ani dnia przerwy pokłóciłem się i zerwałem z dziewczyną. Co się stało tak naprawdę?">💬 Kłótnia po pracy</button>
+        <button class="preset-chip" data-preset="Mimo mocnego postanowienia diety, po stresoogennej rozmowie z szefem zjadłem dużą pizzę i słodycze.">🍔 Zajadanie stresu</button>
+        <button class="preset-chip" data-preset="Od trzech dni odkładam wysłanie trudnego maila z wyjaśnieniem błędu w projekcie i odczuwam ściśnięty żołądek.">⏰ Prokrastynacja zadania</button>
+        <button class="preset-chip" data-preset="Gdy ktoś zajechał mi drogę w korku, poczułem gwałtowną falę wściekłości i uderzyłem w kierownicę.">⚡ Wybuch złości w korku</button>
+      `;
+    }
+
+    container.querySelectorAll('.preset-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const text = chip.getAttribute('data-preset');
+        if (text && textarea) {
+          textarea.value = text;
+        }
+      });
+    });
+  }
+
   private async handleRunFullAnalysisWithInterview(skipAnswers: boolean = false) {
     const textarea = this.container.querySelector('#ai-story-input') as HTMLTextAreaElement;
     const story = textarea?.value.trim();
@@ -844,7 +954,7 @@ export class AiTracerPanel {
 
     this.hideError();
     this.resetTerminalViews();
-    this.showLoading(true, '[ETAP 1/3]: Wyznaczanie Ścieżki w Grafie...');
+    this.showLoading(true, `[ETAP 1/3]: Wyznaczanie Ścieżki w Grafie (Tryb: ${this.currentAnalysisMode.toUpperCase()})...`);
     this.container.querySelector('#ai-interview-wrapper')?.classList.add('hidden');
     this.container.querySelector('#ai-terminal-wrapper')?.classList.remove('hidden');
 
@@ -852,7 +962,15 @@ export class AiTracerPanel {
     const modelSelect = this.container.querySelector('#select-openrouter-model') as HTMLSelectElement;
 
     try {
-      const result = await analyzeSituation(story, answersMap, keyInput?.value, modelSelect?.value, this.createStreamCallbacks());
+      const result = await analyzeSituation(
+        story,
+        answersMap,
+        keyInput?.value,
+        modelSelect?.value,
+        this.createStreamCallbacks(),
+        this.currentAnalysisMode,
+        this.currentDimensionFocus
+      );
       this.lastAnalysisResult = result;
       this.renderResults(result);
     } catch (err: any) {
@@ -933,6 +1051,7 @@ export class AiTracerPanel {
               <strong class="step-title">${step.title}</strong>
               ${isObserver ? '<span class="observer-tag">KLUCZOWY OBSERWATOR</span>' : ''}
             </div>
+            ${step.quote ? `<div class="step-quote-box" style="margin: 6px 0; padding: 6px 10px; background: rgba(79, 172, 254, 0.12); border-left: 3px solid #4facfe; border-radius: 4px; font-style: italic; font-size: 0.88rem; color: #e0f2fe;">💬 <strong>Cytat / Wers:</strong> "${step.quote}"</div>` : ''}
             <p class="step-trigger">⚡ <strong>Wyzwalacz:</strong> ${step.trigger}</p>
             <p class="step-desc">🧠 <strong>Co się stało:</strong> ${step.whatHappened}</p>
             <p class="step-why">🔍 <strong>Mechanika kroku (3D):</strong> ${step.whyItHappened}</p>
